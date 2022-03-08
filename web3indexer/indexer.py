@@ -55,12 +55,10 @@ def run():
         GenericEventCollector(db),
     )
 
-    abi = json.loads(_read_file('abi/PartyAnimals.json'))
-
-    # Party Animals
-    insert_if_not_exists(db, "0x880Fe52C6bc4FFFfb92D6C03858C97807a900691", abi)
-    # Chikn
-    insert_if_not_exists(db, "0x8927985B358692815E18F2138964679DcA5d3b79", abi)
+    abi = json.loads(_read_file('abi/ERC721.json'))
+    addresses = [line for line in _read_file('addresses').split('\n') if line]
+    for address in addresses:
+        insert_if_not_exists(db, address, abi)
 
     add_nft_contracts(db, dispatcher)
 
