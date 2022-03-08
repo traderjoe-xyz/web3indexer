@@ -1,10 +1,13 @@
 from concurrent.futures import ThreadPoolExecutor
 import time
 
+import structlog
 from web3 import Web3
 
 from .task import Task
 
+
+log = structlog.get_logger()
 
 # Special task for stopping the worker.
 STOP_TASK = Task("stop", None, None)
@@ -25,7 +28,7 @@ class Worker:
         with ThreadPoolExecutor(max_workers=self.max_collectors) as executor:
             while True:
                 if int(time.time()) % 60 == 0:
-                    print('Queue size:', self.dispatcher.size)
+                    log.info("worker", queue_size=self.dispatcher.size)
                 task = self.dispatcher.get()
                 # Special case the stop task.
                 if task is STOP_TASK:

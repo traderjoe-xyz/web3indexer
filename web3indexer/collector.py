@@ -1,6 +1,11 @@
 import json
 
+import structlog
+
 from .task import Task
+
+
+log = structlog.get_logger()
 
 
 class Collector:
@@ -38,6 +43,11 @@ class UniSwapFactoryCollector:
                     None,
                 )
             )
+            log.info(
+                "collected",
+                collector=self.__class__.__name__,
+                address=pair_address,
+            )
 
 
 class UniSwapPairDataCollector:
@@ -50,17 +60,17 @@ class UniSwapPairDataCollector:
             address=task.address,
         )
         # Do something like extract the pair name and symbol.
-        print(
-            "watching pair",
-            pair.functions.token0().call(),
-            '-',
-            pair.functions.token1().call())
         dispatcher.put(
             Task(
                 "UniSwapPairSwapCollector",
                 task.address,
                 w3.eth.get_block_number(),
             )
+        )
+        log.info(
+            "collected",
+            collector=self.__class__.__name__,
+            address=task.address,
         )
 
 
@@ -78,10 +88,12 @@ class UniSwapPairSwapCollector:
             fromBlock=task.last_block,
             toBlock=to_block,
         ).get_all_entries()
-        if events:
-            print("Got events", events)
-        else:
-            print('No new events')
+        for event in events:
+            log.info(
+                "collected",
+                collector=self.__class__.__name__,
+                swap=event,
+            )
         dispatcher.schedule(
             Task(
                 task.collector,
