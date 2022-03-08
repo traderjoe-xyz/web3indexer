@@ -37,6 +37,7 @@ def add_nft_contracts(db, dispatcher):
                     contract['address'],
                     event['name'],
                     last_block,
+                    0,
                 )
             )
 
@@ -68,9 +69,7 @@ def run():
         main_thread.start()
         main_thread.join()
     except KeyboardInterrupt:
-        dispatcher.drain()
         dispatcher.put(STOP_TASK)
-        dispatcher.join()
     finally:
         connection.close()
 

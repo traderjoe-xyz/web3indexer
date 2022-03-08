@@ -107,6 +107,7 @@ class UniSwapPairSwapCollector:
 class GenericEventCollector:
 
     BLOCKS_CHUNK_SIZE = 10000
+    MAX_RETRIES = 5
 
     def __init__(self, db):
         self.db = db
@@ -116,8 +117,19 @@ class GenericEventCollector:
             self.collect(dispatcher, w3, task)
         except Exception as exc:
             log.error(exc)
-            # TODO: retry mechanism
-            raise
+            if task.retries < self.MAX_RETRIES:
+                dispatcher.put(
+                    ScrapeTask(
+                        abi=task.abi,
+                        address=task.address,
+                        event=task.event,
+                        from_block=end_block,
+                        collector=task.collector,
+                        retries=task.retries + 1,
+                    )
+                )
+            else:
+                raise
 
     def collect(self, dispatcher, w3, task):
         contract = w3.eth.contract(
@@ -141,6 +153,7 @@ class GenericEventCollector:
             log.msg(
                 'collected',
                 name=task.event,
+                address=task.address,
                 collector=self.__class__.__name__,
                 event_struct=event,
                 from_block=task.from_block,
@@ -156,6 +169,7 @@ class GenericEventCollector:
                     event=task.event,
                     from_block=end_block,
                     collector=task.collector,
+                    retries=0,
                 )
             )
         else:
@@ -166,6 +180,7 @@ class GenericEventCollector:
                     event=task.event,
                     from_block=end_block,
                     collector=task.collector,
+                    retries=0,
                 ),
                 60
             )

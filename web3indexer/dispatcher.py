@@ -26,10 +26,6 @@ class Dispatcher:
 
         return task
 
-    def drain(self):
-        while  self.size:
-            self.queue.get()
-
     def schedule(self, task, n):
         self.put(ScheduledTask(task, time.time() +  n))
 
