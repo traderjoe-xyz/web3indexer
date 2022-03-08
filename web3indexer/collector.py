@@ -2,6 +2,7 @@ import json
 
 import structlog
 
+from .crud import insert_event
 from .task import Task, ScrapeTask
 
 
@@ -107,6 +108,9 @@ class GenericEventCollector:
 
     BLOCKS_CHUNK_SIZE = 10000
 
+    def __init__(self, db):
+        self.db = db
+
     def collect_with_retry(self, dispatcher, w3, task):
         try:
             self.collect(dispatcher, w3, task)
@@ -139,14 +143,29 @@ class GenericEventCollector:
                 name=task.event,
                 collector=self.__class__.__name__,
                 event_struct=event,
+                from_block=task.from_block,
+                to_block=end_block,
             )
+            insert_event(self.db, task.address, event)
 
-        dispatcher.put(
-            ScrapeTask(
-                abi=task.abi,
-                address=task.address,
-                event=task.event,
-                from_block=end_block,
-                collector=task.collector,
+        if end_block != cur_block:
+            dispatcher.put(
+                ScrapeTask(
+                    abi=task.abi,
+                    address=task.address,
+                    event=task.event,
+                    from_block=end_block,
+                    collector=task.collector,
+                )
             )
-        )
+        else:
+            dispatcher.schedule(
+                ScrapeTask(
+                    abi=task.abi,
+                    address=task.address,
+                    event=task.event,
+                    from_block=end_block,
+                    collector=task.collector,
+                ),
+                60
+            )
