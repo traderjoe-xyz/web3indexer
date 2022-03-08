@@ -1,6 +1,7 @@
 import json
 
 import structlog
+from web3 import Web3
 
 from .crud import insert_event
 from .task import Task, ScrapeTask
@@ -159,7 +160,7 @@ class GenericEventCollector:
                 from_block=task.from_block,
                 to_block=end_block,
             )
-            insert_event(self.db, task.address, event)
+            insert_event(self.db, task.address, json.loads(Web3.toJSON(event)))
 
         if end_block != cur_block:
             dispatcher.put(
