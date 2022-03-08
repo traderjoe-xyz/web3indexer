@@ -31,7 +31,6 @@ class Worker:
                 if int(time.time()) % 60 == 0:
                     log.info("worker", queue_size=self.dispatcher.size)
                 task = self.dispatcher.get()
-                log.info('executing task', task=task.collector)
                 # Special case the stop task.
                 if task is STOP_TASK:
                     return

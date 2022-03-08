@@ -128,14 +128,13 @@ class GenericEventCollector:
         else:
             end_block = task.from_block + self.BLOCKS_CHUNK_SIZE
 
-        log.info('in collect', address=task.address, from_block = task.from_block, to_block=end_block)
         events = getattr(contract.events, task.event).createFilter(
             fromBlock=task.from_block,
             toBlock=end_block,
         ).get_all_entries()
 
         for event in events:
-            log.info(
+            log.msg(
                 'collected',
                 name=task.event,
                 collector=self.__class__.__name__,
