@@ -26,15 +26,17 @@ class Worker:
 
     def run(self):
         with ThreadPoolExecutor(max_workers=self.max_collectors) as executor:
+            log.info("worker", queue_size=self.dispatcher.size)
             while True:
                 if int(time.time()) % 60 == 0:
                     log.info("worker", queue_size=self.dispatcher.size)
                 task = self.dispatcher.get()
+                log.info('executing task', task=task.collector)
                 # Special case the stop task.
                 if task is STOP_TASK:
                     return
                 executor.submit(
-                    self.collectors[task.collector].collect,
+                    self.collectors[task.collector].collect_with_retry,
                     self.dispatcher,
                     self.w3,
                     task,
@@ -53,7 +55,7 @@ class Worker:
                 task,
             )
 
-    def add_collector_by_name(self, name, cls):
-        self.collectors[name] = cls()
+    def add_collector_by_name(self, name, obj):
+        self.collectors[name] = obj
 
 
