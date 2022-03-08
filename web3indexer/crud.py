@@ -22,8 +22,8 @@ def insert_event(db, address, event):
         'address': address,
         "name": event['event'],
         "event": event,
-        "blockNumber":
-        event['blockNumber'],
+        "blockNumber": event['blockNumber'],
+        "tokenId": event['args'].get('tokenId'),
     })
 
 
