@@ -10,3 +10,4 @@ RUN poetry install
 
 COPY web3indexer /app/web3indexer
 COPY abi /app/abi
+COPY addresses /app/
