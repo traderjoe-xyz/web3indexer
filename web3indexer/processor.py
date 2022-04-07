@@ -44,16 +44,19 @@ class BlockProcessor:
                 if len(topics) == 4 and topics[0].hex() == ERC721_TRANSFER_TOPIC:
                     if self._supports_erc721(w3, log.address):
                         (transfer_from, transfer_to, tokenId, transaction_hash) = self._parse_erc721_transfer_log(log)
-                        upsert_transfer(
-                            self.db,
-                            Transfer(
-                                contract=log.address,
-                                token_id=tokenId,
-                                transaction_hash=transaction_hash,
-                                transfer_from=transfer_from,
-                                transfer_to=transfer_to,
-                            ),
-                        )
+                        try:
+                            upsert_transfer(
+                                self.db,
+                                Transfer(
+                                    contract=log.address,
+                                    token_id=tokenId,
+                                    transaction_hash=transaction_hash,
+                                    transfer_from=transfer_from,
+                                    transfer_to=transfer_to,
+                                ),
+                            )
+                        except Exception as e:
+                            print(e)
 
     def _parse_erc721_transfer_log(self, log):
         topics = log.topics

@@ -52,7 +52,7 @@ def upsert_transfer(db, transfer: Transfer):
     Insert a transfer event into mongodb
     """
     db.transfers.find_one_and_update(
-        {"transaction_hash": transfer.transaction_hash},
+        {"_id": transfer.transaction_hash},
         {"$set": transfer.dict(by_alias=True)},
         upsert=True,
     )
