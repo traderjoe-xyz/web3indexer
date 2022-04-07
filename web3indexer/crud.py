@@ -44,12 +44,12 @@ def get_last_scanned_event(db, address, default=9000000):
 
 def insert_transfer(db, transfer):
     """
-    Insert an event into mongodb
+    Insert a transfer event into mongodb
     """
     db.transfers.insert_one({
-        "from": transfer["transactionHash"],
-        "nft": transfer["nft"],
-        "to": transfer["transactionHash"],
+        "from": transfer["from"],
+        "nft_contract": transfer["nft_contract"],
+        "to": transfer["to"],
         "tokenId": transfer["tokenId"],
         "transactionHash": transfer["transactionHash"],
     })

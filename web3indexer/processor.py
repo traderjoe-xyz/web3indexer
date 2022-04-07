@@ -35,12 +35,20 @@ class BlockProcessor:
             for log in txn_receipt.logs:
                 topics = log.topics
                 if len(topics) == 4 and topics[0].hex() == ERC721_TRANSFER_TOPIC:
-                        if self._supports_erc721(w3, log.address):
-                            print("SUPPORTS ERC721", log.address)
-                        else:
-                            print("DOESNT SUPPORT ERC721", log.address)
-                        # [_from, to, tokenId] = topics
-                        # print("TRANSFER:", _from, to, tokenId)
+                    if self._supports_erc721(w3, log.address):
+                        print("LOG:", log)
+                        _from = "0x{}".format(topics[1].hex()[26:])
+                        to = "0x{}".format(topics[2].hex()[26:])
+                        tokenId = int(topics[3].hex(), 16)
+                        transactionHash = log.transactionHash.hex()
+                        insert_transfer(self.db, {
+                            'from': _from,
+                            'nft_contract': log.address,
+                            'to': to,
+                            'tokenId': tokenId,
+                            'transactionHash': transactionHash
+                        })
+                        print("TRANSFER:", _from, to, tokenId)
 
     
 
