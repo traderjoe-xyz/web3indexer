@@ -5,6 +5,7 @@ import structlog
 from web3 import Web3
 
 from .crud import upsert_transfer
+from .models import Transfer
 from .task import Task, ScrapeTask
 from .utils import read_file
 
@@ -43,25 +44,28 @@ class BlockProcessor:
                 if len(topics) == 4 and topics[0].hex() == ERC721_TRANSFER_TOPIC:
                     if self._supports_erc721(w3, log.address):
                         print("LOG:", log)
-                        (_from, to, tokenId, transaction_hash) = self._parse_erc721_transfer_log(log)
-                        upsert_transfer(
-                            self.db,
-                            {
-                                "from": _from,
-                                "contract": log.address,
-                                "to": to,
-                                "token_id": tokenId,
-                                "transaction_hash": transaction_hash,
-                            },
-                        )
+                        (transfer_from, transfer_to, tokenId, transaction_hash) = self._parse_erc721_transfer_log(log)
+                        try:
+                            upsert_transfer(
+                                self.db,
+                                Transfer(
+                                    contract=log.address,
+                                    token_id=tokenId,
+                                    transaction_hash=transaction_hash,
+                                    transfer_from=transfer_from,
+                                    transfer_to=transfer_to,
+                                ),
+                            )
+                        except Exception as e:
+                            print(e)
 
     def _parse_erc721_transfer_log(self, log):
         topics = log.topics
-        _from = "0x{}".format(topics[1].hex()[26:])
-        to = "0x{}".format(topics[2].hex()[26:])
+        transfer_from = "0x{}".format(topics[1].hex()[26:])
+        transfer_to = "0x{}".format(topics[2].hex()[26:])
         token_id = int(topics[3].hex(), 16)
         transaction_hash = log.transactionHash.hex()
-        return (_from, to, token_id, transaction_hash)
+        return (transfer_from, transfer_to, token_id, transaction_hash)
 
     def _supports_erc721(self, w3, contract_address):
         try:

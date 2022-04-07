@@ -1,5 +1,7 @@
 import structlog
 
+from .models import Transfer
+
 
 log = structlog.get_logger()
 
@@ -45,21 +47,13 @@ def get_last_scanned_event(db, address, default=9000000):
     return event["blockNumber"]
 
 
-def upsert_transfer(db, transfer):
+def upsert_transfer(db, transfer: Transfer):
     """
     Insert a transfer event into mongodb
     """
     db.transfers.find_one_and_update(
-        {"transaction_hash": transfer["transactionHash"]},
-        {
-            "$set": {
-                "from": transfer["from"],
-                "contract": transfer["contract"],
-                "to": transfer["to"],
-                "token_id": transfer["token_id"],
-                "transaction_hash": transfer["transaction_hash"],
-            }
-        },
+        {"transaction_hash": transfer.transaction_hash},
+        {"$set": transfer.dict(by_alias=True)},
         upsert=True,
     )
 
