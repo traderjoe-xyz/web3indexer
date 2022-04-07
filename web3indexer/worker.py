@@ -3,6 +3,7 @@ import time
 
 import structlog
 from web3 import Web3
+from web3.middleware import geth_poa_middleware
 
 from .processor import BlockProcessor
 from .task import Task, ProcessBlockTask
@@ -25,6 +26,7 @@ class Worker:
         self.max_collectors = max_collectors
         self.collectors = {}
         self.w3 = Web3(Web3.HTTPProvider(endpoint_uri))
+        self.w3.middleware_onion.inject(geth_poa_middleware, layer=0)
 
     def run(self):
         with ThreadPoolExecutor(max_workers=self.max_collectors) as executor:

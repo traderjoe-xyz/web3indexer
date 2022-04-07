@@ -16,4 +16,6 @@ class BlockProcessor:
     """
 
     def process(self, dispatcher, w3, task):
-        print("BLOCK PROCESSOR RECEIVED TASK:", task)
+        print("PROCESSING TASK:", task, task.block_number)
+        block = w3.eth.get_block(task.block_number)
+        print("GOT BLOCK:", block)
