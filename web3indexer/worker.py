@@ -4,7 +4,8 @@ import time
 import structlog
 from web3 import Web3
 
-from .task import Task
+from .processor import BlockProcessor
+from .task import Task, ProcessBlockTask
 
 
 log = structlog.get_logger()
@@ -20,6 +21,7 @@ class Worker:
 
     def __init__(self, endpoint_uri, dispatcher, max_collectors=None):
         self.dispatcher = dispatcher
+        self.processor = BlockProcessor()
         self.max_collectors = max_collectors
         self.collectors = {}
         self.w3 = Web3(Web3.HTTPProvider(endpoint_uri))
@@ -34,12 +36,20 @@ class Worker:
                 # Special case the stop task.
                 if task is STOP_TASK:
                     return
-                executor.submit(
-                    self.collectors[task.collector].collect_with_retry,
-                    self.dispatcher,
-                    self.w3,
-                    task,
-                )
+                if isinstance(task, ProcessBlockTask):
+                    executor.submit(
+                        self.processor.process,
+                        self.dispatcher,
+                        self.w3,
+                        task,
+                    )
+                else:
+                    executor.submit(
+                        self.collectors[task.collector].collect_with_retry,
+                        self.dispatcher,
+                        self.w3,
+                        task,
+                    )
 
     def run_single(self):
         # Used for debugging.

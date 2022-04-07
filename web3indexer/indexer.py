@@ -10,7 +10,7 @@ from web3 import Web3
 from .collector import GenericEventCollector, _read_file  # XXX
 from .crud import get_all_contracts, get_last_scanned_event, insert_if_not_exists
 from .dispatcher import Dispatcher
-from .task import Task, ScrapeTask
+from .task import Task, ScrapeTask, ProcessBlockTask
 from .worker import Worker, STOP_TASK
 
 
@@ -42,6 +42,14 @@ def add_nft_contracts(db, dispatcher):
             )
 
 
+def fetch_block(dispatcher, block_number):
+    dispatcher.put(
+        ProcessBlockTask(
+            block_number=block_number
+        )
+    )
+
+
 
 def run():
     dispatcher = Dispatcher()
@@ -56,11 +64,12 @@ def run():
     )
 
     abi = json.loads(_read_file('abi/ERC721.json'))
-    addresses = [line for line in _read_file('addresses').split('\n') if line]
-    for address in addresses:
-        insert_if_not_exists(db, address, abi)
+    fetch_block(dispatcher, 13087687)
+    # addresses = [line for line in _read_file('addresses').split('\n') if line]
+    # for address in addresses:
+    #     insert_if_not_exists(db, address, abi)
 
-    add_nft_contracts(db, dispatcher)
+    # add_nft_contracts(db, dispatcher)
 
     main_thread = Thread(target=worker.run)
     try:

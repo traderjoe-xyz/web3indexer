@@ -1,7 +1,7 @@
 from queue import Queue
 import time
 
-from .task import ScheduledTask, Task, ScrapeTask
+from .task import ScheduledTask, Task, ScrapeTask, ProcessBlockTask
 
 
 class Dispatcher:
@@ -17,6 +17,8 @@ class Dispatcher:
             task = self.queue.get()
             if isinstance(task, (Task, ScrapeTask)):
                 break
+            if isinstance(task, ProcessBlockTask):
+                return task
             if isinstance(task, ScheduledTask):
                 if time.time() >= task.not_before:
                     task = task.task
