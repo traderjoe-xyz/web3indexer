@@ -26,6 +26,7 @@ class Worker:
         self.max_collectors = max_collectors
         self.collectors = {}
         self.w3 = Web3(Web3.HTTPProvider(endpoint_uri))
+        # Required for Avalanche, see https://web3py.readthedocs.io/en/stable/middleware.html#geth-style-proof-of-authority
         self.w3.middleware_onion.inject(geth_poa_middleware, layer=0)
 
     def run(self):
