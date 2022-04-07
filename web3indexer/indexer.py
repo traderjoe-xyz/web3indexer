@@ -56,7 +56,7 @@ def run():
     endpoint_uri = os.environ['ENDPOINT_URL']
     connection = MongoClient(os.environ['MONGODB_URI'])
     db = connection.web3indexer
-    worker = Worker(endpoint_uri, dispatcher, max_collectors=100)
+    worker = Worker(endpoint_uri, dispatcher, db, max_collectors=100)
 
     worker.add_collector_by_name(
         'GenericEventCollector',

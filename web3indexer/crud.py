@@ -42,5 +42,18 @@ def get_last_scanned_event(db, address, default=9000000):
     return event['blockNumber']
 
 
+def insert_transfer(db, transfer):
+    """
+    Insert an event into mongodb
+    """
+    db.transfers.insert_one({
+        "from": transfer["transactionHash"],
+        "nft": transfer["nft"],
+        "to": transfer["transactionHash"],
+        "tokenId": transfer["tokenId"],
+        "transactionHash": transfer["transactionHash"],
+    })
+
+
 def get_all_contracts(db):
     return db.nft_contracts.find({}, {'address': 1, 'abi': 1, '_id': 0})

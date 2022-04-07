@@ -20,9 +20,9 @@ class Worker:
     Manages collectors and the w3 connection.
     """
 
-    def __init__(self, endpoint_uri, dispatcher, max_collectors=None):
+    def __init__(self, endpoint_uri, dispatcher, db, max_collectors=None):
         self.dispatcher = dispatcher
-        self.processor = BlockProcessor()
+        self.processor = BlockProcessor(db)
         self.max_collectors = max_collectors
         self.collectors = {}
         self.w3 = Web3(Web3.HTTPProvider(endpoint_uri))

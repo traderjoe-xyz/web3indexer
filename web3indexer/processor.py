@@ -3,7 +3,7 @@ import json
 import structlog
 from web3 import Web3
 
-from .crud import insert_event
+from .crud import insert_transfer
 from .task import Task, ScrapeTask
 from .utils import read_file
 
@@ -22,6 +22,9 @@ class BlockProcessor:
     Custom class for fetching, parsing and processing a block from the blockchain.
     """
 
+    def __init__(self, db):
+        self.db = db
+
     def process(self, dispatcher, w3, task):
         block = w3.eth.get_block(task.block_number)
         transactions = block.transactions
@@ -31,10 +34,20 @@ class BlockProcessor:
 
             for log in txn_receipt.logs:
                 topics = log.topics
-                if len(topics) > 0 and topics[0].hex() == ERC721_TRANSFER_TOPIC:
-                    try:
-                        erc165_contract = w3.eth.contract(address=log.address, abi=ERC165_ABI)
-                        supports_erc721 = erc165_contract.functions.supportsInterface(ERC_721_IDENTIFIER).call()
-                        print("FOUND ERC721 CONTRACT:", log.address)
-                    except Exception as e:
-                        pass
+                if len(topics) == 4 and topics[0].hex() == ERC721_TRANSFER_TOPIC:
+                        if self._supports_erc721(w3, log.address):
+                            print("SUPPORTS ERC721", log.address)
+                        else:
+                            print("DOESNT SUPPORT ERC721", log.address)
+                        # [_from, to, tokenId] = topics
+                        # print("TRANSFER:", _from, to, tokenId)
+
+    
+
+    def _supports_erc721(self, w3, contract_address):
+        try:
+            erc165_contract = w3.eth.contract(address=contract_address, abi=ERC165_ABI)
+            return erc165_contract.functions.supportsInterface(ERC_721_IDENTIFIER).call()
+        except Exception as e:
+            print("EXCEPTION:", e)
+            return False
