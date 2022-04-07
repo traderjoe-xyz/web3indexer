@@ -1,4 +1,5 @@
 import json
+from enum import Enum
 
 import structlog
 from web3 import Web3
@@ -9,6 +10,11 @@ from .utils import read_file
 
 
 log = structlog.get_logger()
+
+
+class ContractType(Enum):
+    ERC721 = "ERC721"
+    ERC1155 = "ERC721"
 
 
 ERC165_ABI = read_file("abi/ERC165.json")
@@ -28,7 +34,6 @@ class BlockProcessor:
 
     def process(self, dispatcher, w3, task):
         block = w3.eth.get_block(task.block_number)
-        transactions = block.transactions
 
         for transaction in block.transactions:
             txn_receipt = w3.eth.get_transaction_receipt(transaction)
@@ -38,15 +43,15 @@ class BlockProcessor:
                 if len(topics) == 4 and topics[0].hex() == ERC721_TRANSFER_TOPIC:
                     if self._supports_erc721(w3, log.address):
                         print("LOG:", log)
-                        (_from, to, tokenId, transactionHash) = self._parse_erc721_transfer_log(log)
+                        (_from, to, tokenId, transaction_hash) = self._parse_erc721_transfer_log(log)
                         upsert_transfer(
                             self.db,
                             {
                                 "from": _from,
-                                "nft_contract": log.address,
+                                "contract": log.address,
                                 "to": to,
-                                "tokenId": tokenId,
-                                "transactionHash": transactionHash,
+                                "token_id": tokenId,
+                                "transaction_hash": transaction_hash,
                             },
                         )
 
@@ -54,9 +59,9 @@ class BlockProcessor:
         topics = log.topics
         _from = "0x{}".format(topics[1].hex()[26:])
         to = "0x{}".format(topics[2].hex()[26:])
-        tokenId = int(topics[3].hex(), 16)
-        transactionHash = log.transactionHash.hex()
-        return (_from, to, tokenId, transactionHash)
+        token_id = int(topics[3].hex(), 16)
+        transaction_hash = log.transactionHash.hex()
+        return (_from, to, token_id, transaction_hash)
 
     def _supports_erc721(self, w3, contract_address):
         try:

@@ -54,10 +54,10 @@ def upsert_transfer(db, transfer):
         {
             "$set": {
                 "from": transfer["from"],
-                "nft_contract": transfer["nft_contract"],
+                "contract": transfer["contract"],
                 "to": transfer["to"],
-                "tokenId": transfer["tokenId"],
-                "transaction_hash": transfer["transactionHash"],
+                "token_id": transfer["token_id"],
+                "transaction_hash": transfer["transaction_hash"],
             }
         },
         upsert=True,
