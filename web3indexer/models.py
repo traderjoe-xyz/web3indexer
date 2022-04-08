@@ -33,8 +33,8 @@ class Transfer(BaseModel):
         allow_population_by_field_name = True
 
 
-# TODO: Need a way to check if ownership for a transfer has
-# already been handled to avoid counting multiple times
+# TODO: How can we model this so that we can re-process a block
+# without any corruption in data?
 class Ownership(BaseModel):
     nft_id: str
     owner_address: str

@@ -30,11 +30,17 @@ class ContractType(Enum):
 ERC165_ABI = read_file("abi/ERC165.json")
 ERC1155_ABI = read_file("abi/ERC1155.json")
 ERC721_ABI = read_file("abi/ERC721.json")
+# keccak256("Transfer(address,address,uint256)")
 ERC721_TRANSFER_TOPIC = (
     "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 )
+# keccak256("TransferSingle(address,address,address,uint256,uint256)")
 ERC1155_TRANSFER_SINGLE_TOPIC = (
     "0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62"
+)
+# keccak256("TransferBatch(address,address,address,uint256[],uint256[])")
+ERC1155_TRANSFER_BATCH_TOPIC = (
+    "0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb"
 )
 ERC_165_IDENTIFIER = "01ffc9a7"
 ERC_721_IDENTIFIER = "80ac58cd"
@@ -76,13 +82,18 @@ class BlockProcessor:
             self._process_erc721_log(w3, log, log_index, timestamp)
         elif (
             event_signature == ERC1155_TRANSFER_SINGLE_TOPIC
-            and self._supports_interface(
-                w3, contract_address, ERC_1155_IDENTIFIER
-            )
+            or event_signature == ERC1155_TRANSFER_BATCH_TOPIC
+        ) and self._supports_interface(
+            w3, contract_address, ERC_1155_IDENTIFIER
         ):
-            self._process_erc1155_transfer_single_log(
-                w3, log, log_index, timestamp
-            )
+            if event_signature == ERC1155_TRANSFER_SINGLE_TOPIC:
+                self._process_erc1155_transfer_single_log(
+                    w3, log, log_index, timestamp
+                )
+            elif event_signature == ERC1155_TRANSFER_BATCH_TOPIC:
+                self._process_erc1155_transfer_batch_log(
+                    w3, log, log_index, timestamp
+                )
 
     def _process_erc721_log(
         self, w3: Web3, log, log_index: int, timestamp: datetime
@@ -144,6 +155,8 @@ class BlockProcessor:
             "Processing ERC1155 transfer single",
             transfer_from=transfer_from,
             transfer_to=transfer_to,
+            token_id=token_id,
+            quantity=quantity,
             txn_hash=txn_hash,
         )
         supports_erc1155_metadata = self._supports_interface(
@@ -176,6 +189,27 @@ class BlockProcessor:
         )
         self._upsert_ownerships(
             contract_address, token_id, transfer_from, transfer_to, quantity
+        )
+
+    def _process_erc1155_transfer_batch_log(
+        self, w3: Web3, log, log_index: int, timestamp: datetime
+    ):
+        print("PROCESSING TRANSFER BATCH LOG", log)
+        contract_address = log.address
+        (
+            transfer_from,
+            transfer_to,
+            ids,
+            quantities,
+            txn_hash,
+        ) = self._parse_erc1155_transfer_batch_log(log)
+        logger.info(
+            "Processing ERC1155 transfer batch",
+            transfer_from=transfer_from,
+            transfer_to=transfer_to,
+            ids=ids,
+            quantities=quantities,
+            txn_hash=txn_hash,
         )
 
     def _upsert_contract(
@@ -382,6 +416,55 @@ class BlockProcessor:
             transfer_to,
             token_id,
             quantity,
+            txn_hash,
+        )
+
+    def _parse_erc1155_transfer_batch_log(self, log):
+        # See https://ethereum.stackexchange.com/questions/58854/how-to-decode-data-parameter-under-logs-in-transaction-receipt
+        # Example: https://snowtrace.io/tx/0xe6db4d169488375352ab0ab2d791f76a625e82cf9727d4c648e6be0f80a0d1f2#eventlog
+        topics = log.topics
+        transfer_from = "0x{}".format(topics[2].hex()[26:])
+        transfer_to = "0x{}".format(topics[3].hex()[26:])
+
+        # Strip the prefixing `0x`
+        data = log.data[2:]
+        ids_offset = int(data[0:64], 16)
+        values_offset = int(data[64:128], 16)
+
+        ids_start = ids_offset + 64
+        quantities_start = values_offset + 128
+
+        num_ids = int(data[ids_start : ids_start + 64], 16)
+        num_quantities = int(data[quantities_start : quantities_start + 64], 16)
+
+        if num_ids != num_quantities:
+            raise Exception(
+                "Expected same number of ids and quantities for TransferBatch event log"
+            )
+
+        ids_contents_start = ids_start + 64
+        quantities_contents_start = quantities_start + 64
+
+        ids = []
+        quantities = []
+
+        for i in range(num_ids):
+            start_index = ids_contents_start + i * 64
+            end_index = start_index + 64
+            ids.append(int(data[start_index:end_index], 16))
+
+        for i in range(num_quantities):
+            start_index = quantities_contents_start + i * 64
+            end_index = start_index + 64
+            quantities.append(int(data[start_index:end_index], 16))
+
+        txn_hash = log.transactionHash.hex()
+
+        return (
+            transfer_from,
+            transfer_to,
+            ids,
+            quantities,
             txn_hash,
         )
 

@@ -64,8 +64,11 @@ def run():
     # ERC721 block
     # fetch_block(dispatcher, 13087687)
 
-    # ERC1155 single transfer block
-    fetch_block(dispatcher, 13134106)
+    # ERC1155 transfer single block
+    # fetch_block(dispatcher, 13134106)
+
+    # ERC1155 transfer batch block
+    fetch_block(dispatcher, 8316310)
 
     # addresses = [line for line in _read_file('addresses').split('\n') if line]
     # for address in addresses:
