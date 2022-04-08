@@ -56,51 +56,56 @@ class BlockProcessor:
             txn_receipt = w3.eth.get_transaction_receipt(transaction)
 
             for log in txn_receipt.logs:
-                topics = log.topics
-                contract_address = log.address
-                if topics[
-                    0
-                ].hex() == ERC721_TRANSFER_TOPIC and self._supports_interface(
-                    w3, contract_address, ERC_721_IDENTIFIER
-                ):
-                    (
-                        transfer_from,
-                        transfer_to,
-                        token_id,
-                        transaction_hash,
-                    ) = self._parse_erc721_transfer_log(log)
-                    logger.info(
-                        "Processing ERC721 transfer",
-                        transfer_from=transfer_from,
-                        transfer_to=transfer_to,
-                    )
-                    supports_erc721_metadata = self._supports_interface(
-                        w3, contract_address, ERC_721_METADATA_IDENTIFIER
-                    )
-                    self._upsert_contract(
-                        w3, contract_address, supports_erc721_metadata
-                    )
-                    self._upsert_nft(
-                        w3,
-                        contract_address,
-                        token_id,
-                        supports_erc721_metadata,
-                    )
-                    upsert_transfer(
-                        self.db,
-                        Transfer(
-                            nft_id=get_nft_id(contract_address, token_id),
-                            transaction_hash=transaction_hash,
-                            transfer_from=transfer_from,
-                            transfer_to=transfer_to,
-                        ),
-                    )
-                    self._upsert_ownerships(
-                        contract_address,
-                        token_id,
-                        transfer_from,
-                        transfer_to,
-                    )
+                self._process_log(w3, log)
+
+    def _process_log(self, w3: Web3, log):
+        topics = log.topics
+        contract_address = log.address
+        if topics[
+            0
+        ].hex() == ERC721_TRANSFER_TOPIC and self._supports_interface(
+            w3, contract_address, ERC_721_IDENTIFIER
+        ):
+            self._process_erc721_log(w3, log)
+
+    def _process_erc721_log(self, w3: Web3, log):
+        contract_address = log.address
+        (
+            transfer_from,
+            transfer_to,
+            token_id,
+            transaction_hash,
+        ) = self._parse_erc721_transfer_log(log)
+        logger.info(
+            "Processing ERC721 transfer",
+            transfer_from=transfer_from,
+            transfer_to=transfer_to,
+        )
+        supports_erc721_metadata = self._supports_interface(
+            w3, contract_address, ERC_721_METADATA_IDENTIFIER
+        )
+        self._upsert_contract(w3, contract_address, supports_erc721_metadata)
+        self._upsert_nft(
+            w3,
+            contract_address,
+            token_id,
+            supports_erc721_metadata,
+        )
+        upsert_transfer(
+            self.db,
+            Transfer(
+                nft_id=get_nft_id(contract_address, token_id),
+                transaction_hash=transaction_hash,
+                transfer_from=transfer_from,
+                transfer_to=transfer_to,
+            ),
+        )
+        self._upsert_ownerships(
+            contract_address,
+            token_id,
+            transfer_from,
+            transfer_to,
+        )
 
     def _upsert_contract(
         self, w3: Web3, contract_address: str, supports_erc721_metadata: bool
