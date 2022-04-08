@@ -27,3 +27,9 @@ class Transfer(BaseModel):
 
     class Config:
         allow_population_by_field_name = True
+
+
+class Ownership(BaseModel):
+    nft_id: str
+    owner_address: str
+    delta_quantity: int

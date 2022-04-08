@@ -9,9 +9,10 @@ from .crud import (
     get_nft,
     upsert_contract,
     upsert_nft,
+    upsert_ownership,
     upsert_transfer,
 )
-from .models import Contract, Nft, Transfer
+from .models import Contract, Ownership, Nft, Transfer
 from .task import Task, ScrapeTask
 from .utils import get_nft_id, read_file
 
@@ -91,6 +92,12 @@ class BlockProcessor:
                                 transfer_from=transfer_from,
                                 transfer_to=transfer_to,
                             ),
+                        )
+                        self._upsert_ownerships(
+                            contract_address,
+                            token_id,
+                            transfer_from,
+                            transfer_to,
                         )
                     except Exception as e:
                         print(e)
@@ -173,6 +180,29 @@ class BlockProcessor:
             except Exception as e:
                 return None
         return None
+
+    def _upsert_ownerships(
+        self,
+        contract_address: str,
+        token_id: int,
+        transfer_from: str,
+        transfer_to: str,
+    ):
+        nft_id = get_nft_id(contract_address, token_id)
+        upsert_ownership(
+            self.db,
+            Ownership(
+                nft_id=nft_id,
+                owner_address=transfer_from,
+                delta_quantity=-1,
+            ),
+        )
+        upsert_ownership(
+            self.db,
+            Ownership(
+                nft_id=nft_id, owner_address=transfer_to, delta_quantity=1
+            ),
+        )
 
     def _parse_erc721_transfer_log(self, log):
         topics = log.topics

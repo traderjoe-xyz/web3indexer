@@ -3,7 +3,7 @@ import structlog
 
 from pymongo.database import Database
 
-from .models import Contract, Nft, Transfer
+from .models import Contract, Nft, Ownership, Transfer
 from .utils import get_nft_id
 
 
@@ -72,9 +72,9 @@ def get_nft(db: Database, address: str, token_id: int):
 
 def upsert_nft(db: Database, nft: Nft):
     nft_id = get_nft_id(nft.contract_id, nft.token_id)
-    return db.nfts.find_one_and_update(
+    db.nfts.find_one_and_update(
         {"_id": nft_id},
-        {"$set": {"_id": nft_id, **nft.dict()}},
+        {"$set": {**nft.dict()}},
         upsert=True,
     )
 
@@ -86,6 +86,20 @@ def upsert_transfer(db: Database, transfer: Transfer):
     db.transfers.find_one_and_update(
         {"_id": transfer.transaction_hash},
         {"$set": transfer.dict(by_alias=True)},
+        upsert=True,
+    )
+
+
+def upsert_ownership(db: Database, ownership: Ownership):
+    db.ownerships.find_one_and_update(
+        {"_id": "{}-{}".format(ownership.owner_address, ownership.nft_id)},
+        {
+            "$set": {
+                "nft_id": ownership.nft_id,
+                "owner_address": ownership.owner_address,
+            },
+            "$inc": {"quantity": ownership.delta_quantity},
+        },
         upsert=True,
     )
 
