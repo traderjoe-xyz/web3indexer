@@ -1,6 +1,6 @@
 import structlog
 
-from .models import Transfer
+from .models import Contract, Transfer
 
 
 log = structlog.get_logger()
@@ -45,6 +45,21 @@ def get_last_scanned_event(db, address, default=9000000):
     if event is None:
         return default
     return event["blockNumber"]
+
+
+def get_contract(db, address):
+    return db.contracts.find_one({"_id": address})
+
+
+def upsert_contract(db, contract: Contract):
+    """
+    Insert a contract into mongodb
+    """
+    db.contracts.find_one_and_update(
+        {"_id": contract.address},
+        {"$set": contract.dict(by_alias=True)},
+        upsert=True,
+    )
 
 
 def upsert_transfer(db, transfer: Transfer):
