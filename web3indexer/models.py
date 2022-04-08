@@ -23,7 +23,7 @@ class Nft(BaseModel):
 class Transfer(BaseModel):
     nft_id: str
     quantity: int
-    # timestamp: datetime
+    timestamp: datetime
     transaction_hash: str = Field(alias="_id")
     transfer_from: str = Field(alias="from")
     transfer_to: str = Field(alias="to")

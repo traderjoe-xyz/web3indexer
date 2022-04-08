@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 from enum import Enum
 from types import CoroutineType
@@ -54,14 +55,15 @@ class BlockProcessor:
         logger.info("Processing block", block_number=task.block_number)
 
         block = w3.eth.get_block(task.block_number)
+        timestamp = datetime.fromtimestamp(block.timestamp)
 
         for transaction in block.transactions:
             txn_receipt = w3.eth.get_transaction_receipt(transaction)
 
             for log in txn_receipt.logs:
-                self._process_log(w3, log)
+                self._process_log(w3, log, timestamp)
 
-    def _process_log(self, w3: Web3, log):
+    def _process_log(self, w3: Web3, log, timestamp: datetime):
         topics = log.topics
         contract_address = log.address
         event_signature = topics[0].hex()
@@ -71,16 +73,16 @@ class BlockProcessor:
                 w3, contract_address, ERC_721_IDENTIFIER
             )
         ):
-            self._process_erc721_log(w3, log)
+            self._process_erc721_log(w3, log, timestamp)
         elif (
             event_signature == ERC1155_TRANSFER_SINGLE_TOPIC
             and self._supports_interface(
                 w3, contract_address, ERC_1155_IDENTIFIER
             )
         ):
-            self._process_erc1155_transfer_single_log(w3, log)
+            self._process_erc1155_transfer_single_log(w3, log, timestamp)
 
-    def _process_erc721_log(self, w3: Web3, log):
+    def _process_erc721_log(self, w3: Web3, log, timestamp: datetime):
         contract_address = log.address
         (
             transfer_from,
@@ -112,6 +114,7 @@ class BlockProcessor:
             Transfer(
                 nft_id=get_nft_id(contract_address, token_id),
                 quantity=1,
+                timestamp=timestamp,
                 transaction_hash=transaction_hash,
                 transfer_from=transfer_from,
                 transfer_to=transfer_to,
@@ -121,7 +124,9 @@ class BlockProcessor:
             contract_address, token_id, transfer_from, transfer_to, 1
         )
 
-    def _process_erc1155_transfer_single_log(self, w3: Web3, log):
+    def _process_erc1155_transfer_single_log(
+        self, w3: Web3, log, timestamp: datetime
+    ):
         contract_address = log.address
         (
             transfer_from,
@@ -157,6 +162,7 @@ class BlockProcessor:
             Transfer(
                 nft_id=get_nft_id(contract_address, token_id),
                 quantity=quantity,
+                timestamp=timestamp,
                 transaction_hash=transaction_hash,
                 transfer_from=transfer_from,
                 transfer_to=transfer_to,
