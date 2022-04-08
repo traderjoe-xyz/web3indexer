@@ -8,7 +8,11 @@ import structlog
 from web3 import Web3
 
 from .collector import GenericEventCollector, _read_file  # XXX
-from .crud import get_all_contracts, get_last_scanned_event, insert_if_not_exists
+from .crud import (
+    get_all_contracts,
+    get_last_scanned_event,
+    insert_if_not_exists,
+)
 from .dispatcher import Dispatcher
 from .task import Task, ScrapeTask, ProcessBlockTask
 from .worker import Worker, STOP_TASK
@@ -24,18 +28,16 @@ def add_nft_contracts(db, dispatcher):
     """
     for contract in get_all_contracts(db):
         events = [
-            event
-            for event in contract['abi']
-            if event['type'] == 'event'
+            event for event in contract["abi"] if event["type"] == "event"
         ]
-        last_block = get_last_scanned_event(db, contract['address'])
+        last_block = get_last_scanned_event(db, contract["address"])
         for event in events:
             dispatcher.put(
                 ScrapeTask(
                     "GenericEventCollector",
-                    contract['abi'],
-                    contract['address'],
-                    event['name'],
+                    contract["abi"],
+                    contract["address"],
+                    event["name"],
                     last_block,
                     0,
                 )
@@ -43,27 +45,22 @@ def add_nft_contracts(db, dispatcher):
 
 
 def fetch_block(dispatcher, block_number):
-    dispatcher.put(
-        ProcessBlockTask(
-            block_number=block_number
-        )
-    )
-
+    dispatcher.put(ProcessBlockTask(block_number=block_number))
 
 
 def run():
     dispatcher = Dispatcher()
-    endpoint_uri = os.environ['ENDPOINT_URL']
-    connection = MongoClient(os.environ['MONGODB_URI'])
+    endpoint_uri = os.environ["ENDPOINT_URL"]
+    connection = MongoClient(os.environ["MONGODB_URI"])
     db = connection.web3indexer
     worker = Worker(endpoint_uri, dispatcher, db, max_collectors=100)
 
     worker.add_collector_by_name(
-        'GenericEventCollector',
+        "GenericEventCollector",
         GenericEventCollector(db),
     )
 
-    abi = json.loads(_read_file('abi/ERC721.json'))
+    abi = json.loads(_read_file("abi/ERC721.json"))
     fetch_block(dispatcher, 13087687)
     # addresses = [line for line in _read_file('addresses').split('\n') if line]
     # for address in addresses:
@@ -83,4 +80,3 @@ def run():
 
 def main():
     run()
-

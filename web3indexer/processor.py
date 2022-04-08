@@ -4,8 +4,14 @@ from enum import Enum
 import structlog
 from web3 import Web3
 
-from .crud import get_contract, upsert_contract, upsert_transfer
-from .models import Contract, Transfer
+from .crud import (
+    get_contract,
+    get_nft,
+    upsert_contract,
+    upsert_nft,
+    upsert_transfer,
+)
+from .models import Contract, Nft, Transfer
 from .task import Task, ScrapeTask
 from .utils import read_file
 
@@ -56,7 +62,7 @@ class BlockProcessor:
                         (
                             transfer_from,
                             transfer_to,
-                            tokenId,
+                            token_id,
                             transaction_hash,
                         ) = self._parse_erc721_transfer_log(log)
                         try:
@@ -65,25 +71,42 @@ class BlockProcessor:
                                 transfer_from=transfer_from,
                                 transfer_to=transfer_to,
                             )
+                            supports_erc721_metadata = (
+                                self._supports_erc721_metadata(
+                                    w3, contract_address
+                                )
+                            )
+                            self._upsert_contract(
+                                w3, contract_address, supports_erc721_metadata
+                            )
+                            self._upsert_nft(
+                                w3,
+                                contract_address,
+                                token_id,
+                                supports_erc721_metadata,
+                            )
                             upsert_transfer(
                                 self.db,
                                 Transfer(
                                     contract=contract_address,
-                                    token_id=tokenId,
+                                    token_id=token_id,
                                     transaction_hash=transaction_hash,
                                     transfer_from=transfer_from,
                                     transfer_to=transfer_to,
                                 ),
                             )
-                            self._upsert_contract(w3, contract_address)
                         except Exception as e:
                             print(e)
 
-    def _upsert_contract(self, w3, contract_address):
+    def _upsert_contract(
+        self, w3: Web3, contract_address: str, supports_erc721_metadata: bool
+    ):
         contract = get_contract(self.db, contract_address)
         if contract is None:
-            (name, symbol) = self._fetch_erc721_metadata(w3, contract_address)
-            logger.info("Upserting new contract", name=name, symbol=symbol)
+            (name, symbol) = self._fetch_erc721_contract_metadata(
+                w3, contract_address, supports_erc721_metadata
+            )
+            logger.info("Upserting ERC721 contract", name=name, symbol=symbol)
             upsert_contract(
                 self.db,
                 Contract(
@@ -94,12 +117,11 @@ class BlockProcessor:
                 ),
             )
 
-    def _fetch_erc721_metadata(self, w3, contract_address):
-        try:
-            supports_erc721_metadata = self._supports_erc721_metadata(
-                w3, contract_address
-            )
-            if supports_erc721_metadata:
+    def _fetch_erc721_contract_metadata(
+        self, w3: Web3, contract_address: str, supports_erc721_metadata: bool
+    ):
+        if supports_erc721_metadata:
+            try:
                 erc721_contract = w3.eth.contract(
                     address=contract_address, abi=ERC721_ABI
                 )
@@ -107,9 +129,53 @@ class BlockProcessor:
                     erc721_contract.functions.name().call(),
                     erc721_contract.functions.symbol().call(),
                 )
-            return (None, None)
-        except Exception as e:
-            return (None, None)
+            except Exception as e:
+                return (None, None)
+        return (None, None)
+
+    def _upsert_nft(
+        self,
+        w3,
+        contract_address: str,
+        token_id: int,
+        supports_erc721_metadata: bool,
+    ):
+        nft = get_nft(self.db, contract_address, token_id)
+        if nft is None:
+            token_uri = self._fetch_erc721_token_uri(
+                w3, contract_address, token_id, supports_erc721_metadata
+            )
+            logger.info(
+                "Upserting NFT",
+                contract_address=contract_address,
+                token_id=token_id,
+                token_uri=token_uri,
+            )
+            upsert_nft(
+                self.db,
+                Nft(
+                    contract=contract_address,
+                    token_id=token_id,
+                    token_uri=token_uri,
+                ),
+            )
+
+    def _fetch_erc721_token_uri(
+        self,
+        w3: Web3,
+        contract_address: str,
+        token_id: int,
+        supports_erc721_metadata: bool,
+    ):
+        if supports_erc721_metadata:
+            try:
+                erc721_contract = w3.eth.contract(
+                    address=contract_address, abi=ERC721_ABI
+                )
+                return erc721_contract.functions.tokenURI(token_id).call()
+            except Exception as e:
+                return None
+        return None
 
     def _parse_erc721_transfer_log(self, log):
         topics = log.topics

@@ -13,6 +13,12 @@ class Contract(BaseModel):
         allow_population_by_field_name = True
 
 
+class Nft(BaseModel):
+    contract: str
+    token_id: int
+    token_uri: Optional[str]
+
+
 class Transfer(BaseModel):
     contract: str
     token_id: int
