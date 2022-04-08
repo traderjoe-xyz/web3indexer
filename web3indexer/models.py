@@ -37,11 +37,3 @@ class Transfer(BaseModel):
 
     class Config:
         allow_population_by_field_name = True
-
-
-# TODO: How can we model this so that we can re-process a block
-# without any corruption in data?
-class Ownership(BaseModel):
-    nft_id: str
-    owner_address: str
-    delta_quantity: int

@@ -7,7 +7,6 @@ from .constants import (
     ERC721_TRANSFER_TOPIC,
     ERC1155_TRANSFER_SINGLE_TOPIC,
     ERC1155_TRANSFER_BATCH_TOPIC,
-    ERC_165_IDENTIFIER,
     ERC_721_IDENTIFIER,
     ERC_721_METADATA_IDENTIFIER,
     ERC_1155_IDENTIFIER,
@@ -18,10 +17,9 @@ from .crud import (
     get_nft,
     upsert_contract,
     upsert_nft,
-    upsert_ownership,
     upsert_transfer,
 )
-from .models import Contract, ContractType, Ownership, Nft, Transfer
+from .models import Contract, ContractType, Nft, Transfer
 from .task import ProcessBlockTask
 from .utils import get_nft_id, read_file
 
@@ -134,9 +132,6 @@ class BlockProcessor:
                 transfer_to=transfer_to,
             ),
         )
-        self._upsert_ownerships(
-            contract_address, token_id, transfer_from, transfer_to, 1
-        )
 
     def _process_erc1155_transfer_single_log(
         self, w3: Web3, log, log_index: int, timestamp: datetime
@@ -180,9 +175,6 @@ class BlockProcessor:
                 transfer_from=transfer_from,
                 transfer_to=transfer_to,
             ),
-        )
-        self._upsert_ownerships(
-            contract_address, token_id, transfer_from, transfer_to, quantity
         )
 
     def _process_erc1155_transfer_batch_log(
@@ -233,9 +225,6 @@ class BlockProcessor:
                     transfer_from=transfer_from,
                     transfer_to=transfer_to,
                 ),
-            )
-            self._upsert_ownerships(
-                contract_address, token_id, transfer_from, transfer_to, quantity
             )
 
     def _upsert_contract(
@@ -391,32 +380,6 @@ class BlockProcessor:
             except Exception as e:
                 return None
         return None
-
-    def _upsert_ownerships(
-        self,
-        contract_address: str,
-        token_id: int,
-        transfer_from: str,
-        transfer_to: str,
-        quantity: int,
-    ):
-        nft_id = get_nft_id(contract_address, token_id)
-        upsert_ownership(
-            self.db,
-            Ownership(
-                nft_id=nft_id,
-                owner_address=transfer_from,
-                delta_quantity=-1 * quantity,
-            ),
-        )
-        upsert_ownership(
-            self.db,
-            Ownership(
-                nft_id=nft_id,
-                owner_address=transfer_to,
-                delta_quantity=quantity,
-            ),
-        )
 
     def _parse_erc721_transfer_log(self, log):
         topics = log.topics
