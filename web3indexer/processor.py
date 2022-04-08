@@ -23,7 +23,7 @@ logger = structlog.get_logger()
 
 class ContractType(Enum):
     ERC721 = "ERC721"
-    ERC1155 = "ERC721"
+    ERC1155 = "ERC1155"
 
 
 ERC165_ABI = read_file("abi/ERC165.json")
@@ -360,8 +360,8 @@ class BlockProcessor:
         transfer_to = "0x{}".format(topics[3].hex()[26:])
 
         data = log.data
-        token_id = "0x{}".format(data[2:66])
-        quantity = "0x{}".format(data[66:])
+        token_id = int(data[2:66], 16)
+        quantity = int(data[66:], 16)
 
         transaction_hash = log.transactionHash.hex()
 
