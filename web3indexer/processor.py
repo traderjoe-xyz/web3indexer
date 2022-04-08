@@ -66,41 +66,38 @@ class BlockProcessor:
                         token_id,
                         transaction_hash,
                     ) = self._parse_erc721_transfer_log(log)
-                    try:
-                        logger.info(
-                            "Processing ERC721 transfer",
+                    logger.info(
+                        "Processing ERC721 transfer",
+                        transfer_from=transfer_from,
+                        transfer_to=transfer_to,
+                    )
+                    supports_erc721_metadata = self._supports_erc721_metadata(
+                        w3, contract_address
+                    )
+                    self._upsert_contract(
+                        w3, contract_address, supports_erc721_metadata
+                    )
+                    self._upsert_nft(
+                        w3,
+                        contract_address,
+                        token_id,
+                        supports_erc721_metadata,
+                    )
+                    upsert_transfer(
+                        self.db,
+                        Transfer(
+                            nft_id=get_nft_id(contract_address, token_id),
+                            transaction_hash=transaction_hash,
                             transfer_from=transfer_from,
                             transfer_to=transfer_to,
-                        )
-                        supports_erc721_metadata = (
-                            self._supports_erc721_metadata(w3, contract_address)
-                        )
-                        self._upsert_contract(
-                            w3, contract_address, supports_erc721_metadata
-                        )
-                        self._upsert_nft(
-                            w3,
-                            contract_address,
-                            token_id,
-                            supports_erc721_metadata,
-                        )
-                        upsert_transfer(
-                            self.db,
-                            Transfer(
-                                nft_id=get_nft_id(contract_address, token_id),
-                                transaction_hash=transaction_hash,
-                                transfer_from=transfer_from,
-                                transfer_to=transfer_to,
-                            ),
-                        )
-                        self._upsert_ownerships(
-                            contract_address,
-                            token_id,
-                            transfer_from,
-                            transfer_to,
-                        )
-                    except Exception as e:
-                        print(e)
+                        ),
+                    )
+                    self._upsert_ownerships(
+                        contract_address,
+                        token_id,
+                        transfer_from,
+                        transfer_to,
+                    )
 
     def _upsert_contract(
         self, w3: Web3, contract_address: str, supports_erc721_metadata: bool
