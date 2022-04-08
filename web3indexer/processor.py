@@ -13,7 +13,7 @@ from .crud import (
 )
 from .models import Contract, Nft, Transfer
 from .task import Task, ScrapeTask
-from .utils import read_file
+from .utils import get_nft_id, read_file
 
 
 logger = structlog.get_logger()
@@ -57,46 +57,43 @@ class BlockProcessor:
                 if (
                     len(topics) == 4
                     and topics[0].hex() == ERC721_TRANSFER_TOPIC
+                    and self._supports_erc721(w3, contract_address)
                 ):
-                    if self._supports_erc721(w3, contract_address):
-                        (
-                            transfer_from,
-                            transfer_to,
+                    (
+                        transfer_from,
+                        transfer_to,
+                        token_id,
+                        transaction_hash,
+                    ) = self._parse_erc721_transfer_log(log)
+                    try:
+                        logger.info(
+                            "Processing ERC721 transfer",
+                            transfer_from=transfer_from,
+                            transfer_to=transfer_to,
+                        )
+                        supports_erc721_metadata = (
+                            self._supports_erc721_metadata(w3, contract_address)
+                        )
+                        self._upsert_contract(
+                            w3, contract_address, supports_erc721_metadata
+                        )
+                        self._upsert_nft(
+                            w3,
+                            contract_address,
                             token_id,
-                            transaction_hash,
-                        ) = self._parse_erc721_transfer_log(log)
-                        try:
-                            logger.info(
-                                "Processing ERC721 transfer",
+                            supports_erc721_metadata,
+                        )
+                        upsert_transfer(
+                            self.db,
+                            Transfer(
+                                nft=get_nft_id(contract_address, token_id),
+                                transaction_hash=transaction_hash,
                                 transfer_from=transfer_from,
                                 transfer_to=transfer_to,
-                            )
-                            supports_erc721_metadata = (
-                                self._supports_erc721_metadata(
-                                    w3, contract_address
-                                )
-                            )
-                            self._upsert_contract(
-                                w3, contract_address, supports_erc721_metadata
-                            )
-                            self._upsert_nft(
-                                w3,
-                                contract_address,
-                                token_id,
-                                supports_erc721_metadata,
-                            )
-                            upsert_transfer(
-                                self.db,
-                                Transfer(
-                                    contract=contract_address,
-                                    token_id=token_id,
-                                    transaction_hash=transaction_hash,
-                                    transfer_from=transfer_from,
-                                    transfer_to=transfer_to,
-                                ),
-                            )
-                        except Exception as e:
-                            print(e)
+                            ),
+                        )
+                    except Exception as e:
+                        print(e)
 
     def _upsert_contract(
         self, w3: Web3, contract_address: str, supports_erc721_metadata: bool

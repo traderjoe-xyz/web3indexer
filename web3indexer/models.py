@@ -20,8 +20,7 @@ class Nft(BaseModel):
 
 
 class Transfer(BaseModel):
-    contract: str
-    token_id: int
+    nft: str
     transaction_hash: str = Field(alias="_id")
     transfer_from: str = Field(alias="from")
     transfer_to: str = Field(alias="to")
