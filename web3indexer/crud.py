@@ -4,7 +4,7 @@ import structlog
 from pymongo.database import Database
 
 from .models import Contract, Nft, Ownership, Transfer
-from .utils import get_nft_id
+from .utils import get_nft_id, get_transfer_id
 
 
 log = structlog.get_logger()
@@ -84,7 +84,7 @@ def upsert_transfer(db: Database, transfer: Transfer):
     Insert a transfer event into mongodb
     """
     db.transfers.find_one_and_update(
-        {"_id": transfer.transaction_hash},
+        {"_id": get_transfer_id(transfer)},
         {"$set": transfer.dict(by_alias=True)},
         upsert=True,
     )
