@@ -6,7 +6,7 @@ from web3 import Web3
 from web3.middleware import geth_poa_middleware
 
 from .processor import BlockProcessor
-from .task import Task, ProcessBlockTask
+from .task import ScrapeTask, Task, ProcessBlockTask
 
 
 log = structlog.get_logger()
@@ -41,12 +41,12 @@ class Worker:
                     return
                 if isinstance(task, ProcessBlockTask):
                     executor.submit(
-                        self.processor.process,
+                        self.processor.process_with_retry,
                         self.dispatcher,
                         self.w3,
                         task,
                     )
-                else:
+                elif isinstance(task, Task) or isinstance(task, ScrapeTask):
                     executor.submit(
                         self.collectors[task.collector].collect_with_retry,
                         self.dispatcher,
@@ -69,5 +69,3 @@ class Worker:
 
     def add_collector_by_name(self, name, obj):
         self.collectors[name] = obj
-
-

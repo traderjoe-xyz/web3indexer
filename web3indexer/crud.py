@@ -1,4 +1,3 @@
-from lib2to3.pgen2 import token
 import structlog
 
 from pymongo.database import Database
@@ -66,8 +65,8 @@ def upsert_contract(db: Database, contract: Contract):
     )
 
 
-def get_nft(db: Database, address: str, token_id: int):
-    return db.nfts.find_one({"_id": "{}-{}".format(address, token_id)})
+def get_nft(db: Database, contract_address: str, token_id: int):
+    return db.nfts.find_one({"_id": "{}-{}".format(contract_address, token_id)})
 
 
 def upsert_nft(db: Database, nft: Nft):

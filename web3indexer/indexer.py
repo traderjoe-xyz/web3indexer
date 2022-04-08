@@ -1,24 +1,26 @@
 import json
 import os
-import time
 from threading import Thread
+from typing import List
 
 from pymongo import MongoClient
 import structlog
-from web3 import Web3
 
 from .collector import GenericEventCollector, _read_file  # XXX
 from .crud import (
     get_all_contracts,
     get_last_scanned_event,
-    insert_if_not_exists,
 )
 from .dispatcher import Dispatcher
-from .task import Task, ScrapeTask, ProcessBlockTask
+from .task import ProcessBlockTask, ScrapeTask
 from .worker import Worker, STOP_TASK
 
 
 log = structlog.get_logger()
+
+TEST_ERC721_BLOCK_NUMBER = 13087687
+TEST_ERC1155_TRANSFER_SINGLE_BLOCK_NUMBER = 13134106
+TEST_ERC1155_TRANSFER_BATCH_BLOCK_NUMBER = 8316310
 
 
 def add_nft_contracts(db, dispatcher):
@@ -44,8 +46,9 @@ def add_nft_contracts(db, dispatcher):
             )
 
 
-def fetch_block(dispatcher, block_number):
-    dispatcher.put(ProcessBlockTask(block_number=block_number))
+def fetch_blocks(dispatcher, block_numbers: List[int]):
+    for block_number in block_numbers:
+        dispatcher.put(ProcessBlockTask(block_number=block_number))
 
 
 def run():
@@ -55,21 +58,21 @@ def run():
     db = connection.web3indexer
     worker = Worker(endpoint_uri, dispatcher, db, max_collectors=100)
 
-    worker.add_collector_by_name(
-        "GenericEventCollector",
-        GenericEventCollector(db),
+    fetch_blocks(
+        dispatcher,
+        [
+            TEST_ERC721_BLOCK_NUMBER,
+            TEST_ERC1155_TRANSFER_SINGLE_BLOCK_NUMBER,
+            TEST_ERC1155_TRANSFER_BATCH_BLOCK_NUMBER,
+        ],
     )
 
-    abi = json.loads(_read_file("abi/ERC721.json"))
-    # ERC721 block
-    # fetch_block(dispatcher, 13087687)
+    # worker.add_collector_by_name(
+    #     "GenericEventCollector",
+    #     GenericEventCollector(db),
+    # )
 
-    # ERC1155 transfer single block
-    # fetch_block(dispatcher, 13134106)
-
-    # ERC1155 transfer batch block
-    fetch_block(dispatcher, 8316310)
-
+    # abi = json.loads(_read_file("abi/ERC721.json"))
     # addresses = [line for line in _read_file('addresses').split('\n') if line]
     # for address in addresses:
     #     insert_if_not_exists(db, address, abi)

@@ -1,7 +1,5 @@
 from datetime import datetime
-import json
 from enum import Enum
-from types import CoroutineType
 
 import structlog
 from web3 import Web3
@@ -15,7 +13,7 @@ from .crud import (
     upsert_transfer,
 )
 from .models import Contract, Ownership, Nft, Transfer
-from .task import Task, ScrapeTask
+from .task import ProcessBlockTask
 from .utils import get_nft_id, read_file
 
 
@@ -54,8 +52,24 @@ class BlockProcessor:
     Custom class for fetching, parsing and processing a block from the blockchain.
     """
 
+    MAX_RETRIES = 5
+
     def __init__(self, db):
         self.db = db
+
+    def process_with_retry(self, dispatcher, w3, task):
+        try:
+            self.process(dispatcher, w3, task)
+        except Exception as e:
+            logger.error(e)
+            if task.retries < self.MAX_RETRIES:
+                dispatcher.put(ProcessBlockTask(block_number=task.block_number))
+            else:
+                raise Exception(
+                    "Reached max number of retries for processing block number {}".format(
+                        task.block_number
+                    )
+                )
 
     def process(self, dispatcher, w3, task):
         logger.info("Processing block", block_number=task.block_number)
@@ -457,7 +471,6 @@ class BlockProcessor:
 
     def _parse_erc1155_transfer_batch_log(self, log):
         # See https://ethereum.stackexchange.com/questions/58854/how-to-decode-data-parameter-under-logs-in-transaction-receipt
-        # Example: https://snowtrace.io/tx/0xe6db4d169488375352ab0ab2d791f76a625e82cf9727d4c648e6be0f80a0d1f2#eventlog
         topics = log.topics
         transfer_from = "0x{}".format(topics[2].hex()[26:])
         transfer_to = "0x{}".format(topics[3].hex()[26:])
