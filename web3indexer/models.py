@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 
 from pydantic import BaseModel, Field
@@ -21,6 +22,8 @@ class Nft(BaseModel):
 
 class Transfer(BaseModel):
     nft_id: str
+    quantity: int
+    # timestamp: datetime
     transaction_hash: str = Field(alias="_id")
     transfer_from: str = Field(alias="from")
     transfer_to: str = Field(alias="to")

@@ -1,5 +1,6 @@
 import json
 from enum import Enum
+from types import CoroutineType
 
 import structlog
 from web3 import Web3
@@ -26,6 +27,7 @@ class ContractType(Enum):
 
 
 ERC165_ABI = read_file("abi/ERC165.json")
+ERC1155_ABI = read_file("abi/ERC1155.json")
 ERC721_ABI = read_file("abi/ERC721.json")
 ERC721_TRANSFER_TOPIC = (
     "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
@@ -37,6 +39,7 @@ ERC_165_IDENTIFIER = "01ffc9a7"
 ERC_721_IDENTIFIER = "80ac58cd"
 ERC_721_METADATA_IDENTIFIER = "5b5e139f"
 ERC_1155_IDENTIFIER = "d9b67a26"
+ERC_1155_METADATA_IDENTIFIER = "0e89341c"
 
 
 class BlockProcessor:
@@ -94,27 +97,28 @@ class BlockProcessor:
         supports_erc721_metadata = self._supports_interface(
             w3, contract_address, ERC_721_METADATA_IDENTIFIER
         )
-        self._upsert_contract(w3, contract_address, supports_erc721_metadata)
+        self._upsert_contract(
+            w3, contract_address, ContractType.ERC721, supports_erc721_metadata
+        )
         self._upsert_nft(
             w3,
             contract_address,
             token_id,
+            ContractType.ERC721,
             supports_erc721_metadata,
         )
         upsert_transfer(
             self.db,
             Transfer(
                 nft_id=get_nft_id(contract_address, token_id),
+                quantity=1,
                 transaction_hash=transaction_hash,
                 transfer_from=transfer_from,
                 transfer_to=transfer_to,
             ),
         )
         self._upsert_ownerships(
-            contract_address,
-            token_id,
-            transfer_from,
-            transfer_to,
+            contract_address, token_id, transfer_from, transfer_to, 1
         )
 
     def _process_erc1155_transfer_single_log(self, w3: Web3, log):
@@ -132,17 +136,57 @@ class BlockProcessor:
             transfer_to=transfer_to,
             transaction_hash=transaction_hash,
         )
-        print("FOUND 1155 LOG:", log)
+        supports_erc1155_metadata = self._supports_interface(
+            w3, contract_address, ERC_1155_METADATA_IDENTIFIER
+        )
+        self._upsert_contract(
+            w3,
+            contract_address,
+            ContractType.ERC1155,
+            supports_erc1155_metadata,
+        )
+        self._upsert_nft(
+            w3,
+            contract_address,
+            token_id,
+            ContractType.ERC1155,
+            supports_erc1155_metadata,
+        )
+        upsert_transfer(
+            self.db,
+            Transfer(
+                nft_id=get_nft_id(contract_address, token_id),
+                quantity=quantity,
+                transaction_hash=transaction_hash,
+                transfer_from=transfer_from,
+                transfer_to=transfer_to,
+            ),
+        )
+        self._upsert_ownerships(
+            contract_address, token_id, transfer_from, transfer_to, quantity
+        )
 
     def _upsert_contract(
-        self, w3: Web3, contract_address: str, supports_erc721_metadata: bool
+        self,
+        w3: Web3,
+        contract_address: str,
+        contract_type: ContractType,
+        supports_metadata: bool,
     ):
         contract = get_contract(self.db, contract_address)
-        if contract is None:
+        if contract is not None:
+            return
+
+        if contract_type == ContractType.ERC721:
             (name, symbol) = self._fetch_erc721_contract_metadata(
-                w3, contract_address, supports_erc721_metadata
+                w3, contract_address, supports_metadata
             )
-            logger.info("Upserting ERC721 contract", name=name, symbol=symbol)
+            logger.info(
+                "Upserting ERC721 contract",
+                name=name,
+                symbol=symbol,
+                address=contract_address,
+            )
             upsert_contract(
                 self.db,
                 Contract(
@@ -151,6 +195,24 @@ class BlockProcessor:
                     symbol=symbol,
                     contract_type=ContractType.ERC721.value,
                 ),
+            )
+        elif contract_type == ContractType.ERC1155:
+            logger.info(
+                "Upserting ERC1155 contract",
+                address=contract_address,
+            )
+            upsert_contract(
+                self.db,
+                Contract(
+                    address=contract_address,
+                    contract_type=ContractType.ERC1155.value,
+                ),
+            )
+        else:
+            raise Exception(
+                "Unhandled contract type in `_upsert_contract`: {}".format(
+                    contract_type
+                )
             )
 
     def _fetch_erc721_contract_metadata(
@@ -174,15 +236,19 @@ class BlockProcessor:
         w3,
         contract_address: str,
         token_id: int,
-        supports_erc721_metadata: bool,
+        contract_type: ContractType,
+        supports_metadata: bool,
     ):
         nft = get_nft(self.db, contract_address, token_id)
-        if nft is None:
+        if nft is not None:
+            return
+
+        if contract_type == ContractType.ERC721:
             token_uri = self._fetch_erc721_token_uri(
-                w3, contract_address, token_id, supports_erc721_metadata
+                w3, contract_address, token_id, supports_metadata
             )
             logger.info(
-                "Upserting NFT",
+                "Upserting ERC721 NFT",
                 contract_address=contract_address,
                 token_id=token_id,
                 token_uri=token_uri,
@@ -194,6 +260,30 @@ class BlockProcessor:
                     token_id=token_id,
                     token_uri=token_uri,
                 ),
+            )
+        elif contract_type == ContractType.ERC1155:
+            token_uri = self._fetch_erc1155_token_uri(
+                w3, contract_address, token_id, supports_metadata
+            )
+            logger.info(
+                "Upserting ERC1155 NFT",
+                contract_address=contract_address,
+                token_id=token_id,
+                token_uri=token_uri,
+            )
+            upsert_nft(
+                self.db,
+                Nft(
+                    contract_id=contract_address,
+                    token_id=token_id,
+                    token_uri=token_uri,
+                ),
+            )
+        else:
+            raise Exception(
+                "Unhandled contract type in `_upsert_nft`: {}".format(
+                    contract_type
+                )
             )
 
     def _fetch_erc721_token_uri(
@@ -213,12 +303,30 @@ class BlockProcessor:
                 return None
         return None
 
+    def _fetch_erc1155_token_uri(
+        self,
+        w3: Web3,
+        contract_address: str,
+        token_id: int,
+        supports_metadata: bool,
+    ):
+        if supports_metadata:
+            try:
+                erc1155_contract = w3.eth.contract(
+                    address=contract_address, abi=ERC1155_ABI
+                )
+                return erc1155_contract.functions.uri(token_id).call()
+            except Exception as e:
+                return None
+        return None
+
     def _upsert_ownerships(
         self,
         contract_address: str,
         token_id: int,
         transfer_from: str,
         transfer_to: str,
+        quantity: int,
     ):
         nft_id = get_nft_id(contract_address, token_id)
         upsert_ownership(
@@ -226,13 +334,15 @@ class BlockProcessor:
             Ownership(
                 nft_id=nft_id,
                 owner_address=transfer_from,
-                delta_quantity=-1,
+                delta_quantity=-1 * quantity,
             ),
         )
         upsert_ownership(
             self.db,
             Ownership(
-                nft_id=nft_id, owner_address=transfer_to, delta_quantity=1
+                nft_id=nft_id,
+                owner_address=transfer_to,
+                delta_quantity=quantity,
             ),
         )
 
