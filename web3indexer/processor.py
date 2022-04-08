@@ -30,6 +30,9 @@ ERC721_ABI = read_file("abi/ERC721.json")
 ERC721_TRANSFER_TOPIC = (
     "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
 )
+ERC1155_TRANSFER_SINGLE_TOPIC = (
+    "0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62"
+)
 ERC_165_IDENTIFIER = "01ffc9a7"
 ERC_721_IDENTIFIER = "80ac58cd"
 ERC_721_METADATA_IDENTIFIER = "5b5e139f"
@@ -55,10 +58,10 @@ class BlockProcessor:
             for log in txn_receipt.logs:
                 topics = log.topics
                 contract_address = log.address
-                if (
-                    len(topics) == 4
-                    and topics[0].hex() == ERC721_TRANSFER_TOPIC
-                    and self._supports_erc721(w3, contract_address)
+                if topics[
+                    0
+                ].hex() == ERC721_TRANSFER_TOPIC and self._supports_interface(
+                    w3, contract_address, ERC_721_IDENTIFIER
                 ):
                     (
                         transfer_from,
@@ -71,8 +74,8 @@ class BlockProcessor:
                         transfer_from=transfer_from,
                         transfer_to=transfer_to,
                     )
-                    supports_erc721_metadata = self._supports_erc721_metadata(
-                        w3, contract_address
+                    supports_erc721_metadata = self._supports_interface(
+                        w3, contract_address, ERC_721_METADATA_IDENTIFIER
                     )
                     self._upsert_contract(
                         w3, contract_address, supports_erc721_metadata
@@ -209,24 +212,13 @@ class BlockProcessor:
         transaction_hash = log.transactionHash.hex()
         return (transfer_from, transfer_to, token_id, transaction_hash)
 
-    def _supports_erc721(self, w3, contract_address):
+    def _supports_interface(
+        self, w3: Web3, contract_address: str, interface: str
+    ):
         try:
             erc165_contract = w3.eth.contract(
                 address=contract_address, abi=ERC165_ABI
             )
-            return erc165_contract.functions.supportsInterface(
-                ERC_721_IDENTIFIER
-            ).call()
-        except Exception as e:
-            return False
-
-    def _supports_erc721_metadata(self, w3, contract_address):
-        try:
-            erc165_contract = w3.eth.contract(
-                address=contract_address, abi=ERC165_ABI
-            )
-            return erc165_contract.functions.supportsInterface(
-                ERC_721_METADATA_IDENTIFIER
-            ).call()
+            return erc165_contract.functions.supportsInterface(interface).call()
         except Exception as e:
             return False
