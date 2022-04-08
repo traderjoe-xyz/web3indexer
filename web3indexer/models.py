@@ -14,13 +14,13 @@ class Contract(BaseModel):
 
 
 class Nft(BaseModel):
-    contract: str
+    contract_id: str
     token_id: int
     token_uri: Optional[str]
 
 
 class Transfer(BaseModel):
-    nft: str
+    nft_id: str
     transaction_hash: str = Field(alias="_id")
     transfer_from: str = Field(alias="from")
     transfer_to: str = Field(alias="to")

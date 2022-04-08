@@ -71,7 +71,7 @@ def get_nft(db: Database, address: str, token_id: int):
 
 
 def upsert_nft(db: Database, nft: Nft):
-    nft_id = get_nft_id(nft.contract, nft.token_id)
+    nft_id = get_nft_id(nft.contract_id, nft.token_id)
     return db.nfts.find_one_and_update(
         {"_id": nft_id},
         {"$set": {"_id": nft_id, **nft.dict()}},

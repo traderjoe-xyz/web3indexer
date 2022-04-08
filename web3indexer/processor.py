@@ -86,7 +86,7 @@ class BlockProcessor:
                         upsert_transfer(
                             self.db,
                             Transfer(
-                                nft=get_nft_id(contract_address, token_id),
+                                nft_id=get_nft_id(contract_address, token_id),
                                 transaction_hash=transaction_hash,
                                 transfer_from=transfer_from,
                                 transfer_to=transfer_to,
@@ -151,7 +151,7 @@ class BlockProcessor:
             upsert_nft(
                 self.db,
                 Nft(
-                    contract=contract_address,
+                    contract_id=contract_address,
                     token_id=token_id,
                     token_uri=token_uri,
                 ),
