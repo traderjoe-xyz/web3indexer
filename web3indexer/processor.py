@@ -1,9 +1,18 @@
 from datetime import datetime
-from enum import Enum
 
 import structlog
 from web3 import Web3
 
+from .constants import (
+    ERC721_TRANSFER_TOPIC,
+    ERC1155_TRANSFER_SINGLE_TOPIC,
+    ERC1155_TRANSFER_BATCH_TOPIC,
+    ERC_165_IDENTIFIER,
+    ERC_721_IDENTIFIER,
+    ERC_721_METADATA_IDENTIFIER,
+    ERC_1155_IDENTIFIER,
+    ERC_1155_METADATA_IDENTIFIER,
+)
 from .crud import (
     get_contract,
     get_nft,
@@ -12,44 +21,21 @@ from .crud import (
     upsert_ownership,
     upsert_transfer,
 )
-from .models import Contract, Ownership, Nft, Transfer
+from .models import Contract, ContractType, Ownership, Nft, Transfer
 from .task import ProcessBlockTask
 from .utils import get_nft_id, read_file
 
 
 logger = structlog.get_logger()
 
-
-class ContractType(Enum):
-    ERC721 = "ERC721"
-    ERC1155 = "ERC1155"
-
-
 ERC165_ABI = read_file("abi/ERC165.json")
 ERC1155_ABI = read_file("abi/ERC1155.json")
 ERC721_ABI = read_file("abi/ERC721.json")
-# keccak256("Transfer(address,address,uint256)")
-ERC721_TRANSFER_TOPIC = (
-    "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef"
-)
-# keccak256("TransferSingle(address,address,address,uint256,uint256)")
-ERC1155_TRANSFER_SINGLE_TOPIC = (
-    "0xc3d58168c5ae7397731d063d5bbf3d657854427343f4c083240f7aacaa2d0f62"
-)
-# keccak256("TransferBatch(address,address,address,uint256[],uint256[])")
-ERC1155_TRANSFER_BATCH_TOPIC = (
-    "0x4a39dc06d4c0dbc64b70af90fd698a233a518aa5d07e595d983b8c0526c8f7fb"
-)
-ERC_165_IDENTIFIER = "01ffc9a7"
-ERC_721_IDENTIFIER = "80ac58cd"
-ERC_721_METADATA_IDENTIFIER = "5b5e139f"
-ERC_1155_IDENTIFIER = "d9b67a26"
-ERC_1155_METADATA_IDENTIFIER = "0e89341c"
 
 
 class BlockProcessor:
     """
-    Custom class for fetching, parsing and processing a block from the blockchain.
+    Handles fetching, parsing and storing information for a given block.
     """
 
     MAX_RETRIES = 5
@@ -121,8 +107,6 @@ class BlockProcessor:
         ) = self._parse_erc721_transfer_log(log)
         logger.info(
             "Processing ERC721 transfer",
-            transfer_from=transfer_from,
-            transfer_to=transfer_to,
             txn_hash=txn_hash,
         )
         supports_erc721_metadata = self._supports_interface(
@@ -167,10 +151,6 @@ class BlockProcessor:
         ) = self._parse_erc1155_transfer_single_log(log)
         logger.info(
             "Processing ERC1155 transfer single",
-            transfer_from=transfer_from,
-            transfer_to=transfer_to,
-            token_id=token_id,
-            quantity=quantity,
             txn_hash=txn_hash,
         )
         supports_erc1155_metadata = self._supports_interface(
@@ -218,10 +198,6 @@ class BlockProcessor:
         ) = self._parse_erc1155_transfer_batch_log(log)
         logger.info(
             "Processing ERC1155 transfer batch",
-            transfer_from=transfer_from,
-            transfer_to=transfer_to,
-            token_ids=token_ids,
-            quantities=quantities,
             txn_hash=txn_hash,
         )
         supports_erc1155_metadata = self._supports_interface(

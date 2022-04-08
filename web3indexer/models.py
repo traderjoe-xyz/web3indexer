@@ -1,7 +1,13 @@
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 
 from pydantic import BaseModel, Field
+
+
+class ContractType(Enum):
+    ERC721 = "ERC721"
+    ERC1155 = "ERC1155"
 
 
 class Contract(BaseModel):
