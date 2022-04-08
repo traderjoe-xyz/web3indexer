@@ -194,12 +194,11 @@ class BlockProcessor:
     def _process_erc1155_transfer_batch_log(
         self, w3: Web3, log, log_index: int, timestamp: datetime
     ):
-        print("PROCESSING TRANSFER BATCH LOG", log)
         contract_address = log.address
         (
             transfer_from,
             transfer_to,
-            ids,
+            token_ids,
             quantities,
             txn_hash,
         ) = self._parse_erc1155_transfer_batch_log(log)
@@ -207,10 +206,47 @@ class BlockProcessor:
             "Processing ERC1155 transfer batch",
             transfer_from=transfer_from,
             transfer_to=transfer_to,
-            ids=ids,
+            token_ids=token_ids,
             quantities=quantities,
             txn_hash=txn_hash,
         )
+        supports_erc1155_metadata = self._supports_interface(
+            w3, contract_address, ERC_1155_METADATA_IDENTIFIER
+        )
+        self._upsert_contract(
+            w3,
+            contract_address,
+            ContractType.ERC1155,
+            supports_erc1155_metadata,
+        )
+
+        # We expect there to be same number of `token_ids` as `quantities`
+        for i in range(len(token_ids)):
+            token_id = token_ids[i]
+            quantity = quantities[i]
+
+            self._upsert_nft(
+                w3,
+                contract_address,
+                token_id,
+                ContractType.ERC1155,
+                supports_erc1155_metadata,
+            )
+            upsert_transfer(
+                self.db,
+                Transfer(
+                    log_index=log_index,
+                    nft_id=get_nft_id(contract_address, token_id),
+                    quantity=quantity,
+                    timestamp=timestamp,
+                    txn_hash=txn_hash,
+                    transfer_from=transfer_from,
+                    transfer_to=transfer_to,
+                ),
+            )
+            self._upsert_ownerships(
+                contract_address, token_id, transfer_from, transfer_to, quantity
+            )
 
     def _upsert_contract(
         self,

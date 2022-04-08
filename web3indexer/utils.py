@@ -6,9 +6,10 @@ def get_nft_id(contract_address: str, token_id: int):
 
 
 def get_transfer_id(transfer: Transfer):
-    return "{}-{}".format(
-        transfer.txn_hash,
-        transfer.log_index,
+    # We need to include the `nft_id` in order to avoid conflicts because
+    # an ERC1155 `TransferBatch` event contains multiple transfers
+    return "{}-{}-{}".format(
+        transfer.txn_hash, transfer.log_index, transfer.nft_id
     )
 
 
