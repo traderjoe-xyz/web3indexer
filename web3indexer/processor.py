@@ -61,12 +61,21 @@ class BlockProcessor:
     def _process_log(self, w3: Web3, log):
         topics = log.topics
         contract_address = log.address
-        if topics[
-            0
-        ].hex() == ERC721_TRANSFER_TOPIC and self._supports_interface(
-            w3, contract_address, ERC_721_IDENTIFIER
+        event_signature = topics[0].hex()
+        if (
+            event_signature == ERC721_TRANSFER_TOPIC
+            and self._supports_interface(
+                w3, contract_address, ERC_721_IDENTIFIER
+            )
         ):
             self._process_erc721_log(w3, log)
+        elif (
+            event_signature == ERC1155_TRANSFER_SINGLE_TOPIC
+            and self._supports_interface(
+                w3, contract_address, ERC_1155_IDENTIFIER
+            )
+        ):
+            self._process_erc1155_transfer_single_log(w3, log)
 
     def _process_erc721_log(self, w3: Web3, log):
         contract_address = log.address
@@ -80,6 +89,7 @@ class BlockProcessor:
             "Processing ERC721 transfer",
             transfer_from=transfer_from,
             transfer_to=transfer_to,
+            transaction_hash=transaction_hash,
         )
         supports_erc721_metadata = self._supports_interface(
             w3, contract_address, ERC_721_METADATA_IDENTIFIER
@@ -106,6 +116,23 @@ class BlockProcessor:
             transfer_from,
             transfer_to,
         )
+
+    def _process_erc1155_transfer_single_log(self, w3: Web3, log):
+        contract_address = log.address
+        (
+            transfer_from,
+            transfer_to,
+            token_id,
+            quantity,
+            transaction_hash,
+        ) = self._parse_erc1155_transfer_single_log(log)
+        logger.info(
+            "Processing ERC1155 transfer single",
+            transfer_from=transfer_from,
+            transfer_to=transfer_to,
+            transaction_hash=transaction_hash,
+        )
+        print("FOUND 1155 LOG:", log)
 
     def _upsert_contract(
         self, w3: Web3, contract_address: str, supports_erc721_metadata: bool
@@ -216,6 +243,25 @@ class BlockProcessor:
         token_id = int(topics[3].hex(), 16)
         transaction_hash = log.transactionHash.hex()
         return (transfer_from, transfer_to, token_id, transaction_hash)
+
+    def _parse_erc1155_transfer_single_log(self, log):
+        topics = log.topics
+        transfer_from = "0x{}".format(topics[2].hex()[26:])
+        transfer_to = "0x{}".format(topics[3].hex()[26:])
+
+        data = log.data
+        token_id = "0x{}".format(data[2:66])
+        quantity = "0x{}".format(data[66:])
+
+        transaction_hash = log.transactionHash.hex()
+
+        return (
+            transfer_from,
+            transfer_to,
+            token_id,
+            quantity,
+            transaction_hash,
+        )
 
     def _supports_interface(
         self, w3: Web3, contract_address: str, interface: str

@@ -61,7 +61,12 @@ def run():
     )
 
     abi = json.loads(_read_file("abi/ERC721.json"))
-    fetch_block(dispatcher, 13087687)
+    # ERC721 block
+    # fetch_block(dispatcher, 13087687)
+
+    # ERC1155 single transfer block
+    fetch_block(dispatcher, 13134106)
+
     # addresses = [line for line in _read_file('addresses').split('\n') if line]
     # for address in addresses:
     #     insert_if_not_exists(db, address, abi)
