@@ -12,7 +12,7 @@ from .crud import (
     get_last_scanned_event,
 )
 from .dispatcher import Dispatcher
-from .task import ProcessBlockTask, ScrapeTask
+from .task import FetchBlockTask, ScrapeTask
 from .worker import Worker, STOP_TASK
 
 
@@ -48,7 +48,7 @@ def add_nft_contracts(db, dispatcher):
 
 def fetch_blocks(dispatcher, block_numbers: List[int]):
     for block_number in block_numbers:
-        dispatcher.put(ProcessBlockTask(block_number=block_number))
+        dispatcher.put(FetchBlockTask(block_number=block_number))
 
 
 def run():

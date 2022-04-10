@@ -5,8 +5,9 @@ import structlog
 from web3 import Web3
 from web3.middleware import geth_poa_middleware
 
-from .processor import BlockProcessor
-from .task import ScrapeTask, Task, ProcessBlockTask
+from .block_fetcher import BlockFetcher
+from .log_processor import LogProcessor
+from .task import ScrapeTask, Task, ProcessLogTask, FetchBlockTask
 
 
 log = structlog.get_logger()
@@ -22,7 +23,8 @@ class Worker:
 
     def __init__(self, endpoint_uri, dispatcher, db, max_collectors=None):
         self.dispatcher = dispatcher
-        self.processor = BlockProcessor(db)
+        self.block_fetcher = BlockFetcher()
+        self.log_processor = LogProcessor(db)
         self.max_collectors = max_collectors
         self.collectors = {}
         self.w3 = Web3(Web3.HTTPProvider(endpoint_uri))
@@ -39,9 +41,16 @@ class Worker:
                 # Special case the stop task.
                 if task is STOP_TASK:
                     return
-                if isinstance(task, ProcessBlockTask):
+                if isinstance(task, FetchBlockTask):
                     executor.submit(
-                        self.processor.process_with_retry,
+                        self.block_fetcher.fetch_with_retry,
+                        self.dispatcher,
+                        self.w3,
+                        task,
+                    )
+                elif isinstance(task, ProcessLogTask):
+                    executor.submit(
+                        self.log_processor.process_with_retry,
                         self.dispatcher,
                         self.w3,
                         task,

@@ -19,8 +19,9 @@ from .crud import (
     upsert_nft,
     upsert_transfer,
 )
+from .dispatcher import Dispatcher
 from .models import Contract, ContractType, Nft, Transfer
-from .task import ProcessBlockTask
+from .task import ProcessLogTask
 from .utils import get_nft_id, read_file
 
 
@@ -31,7 +32,7 @@ ERC1155_ABI = read_file("abi/ERC1155.json")
 ERC721_ABI = read_file("abi/ERC721.json")
 
 
-class BlockProcessor:
+class LogProcessor:
     """
     Handles fetching, parsing and storing information for a given block.
     """
@@ -41,13 +42,22 @@ class BlockProcessor:
     def __init__(self, db):
         self.db = db
 
-    def process_with_retry(self, dispatcher, w3, task):
+    def process_with_retry(
+        self, dispatcher: Dispatcher, w3: Web3, task: ProcessLogTask
+    ):
         try:
             self.process(dispatcher, w3, task)
         except Exception as e:
             logger.error(e)
             if task.retries < self.MAX_RETRIES:
-                dispatcher.put(ProcessBlockTask(block_number=task.block_number))
+                dispatcher.put(
+                    ProcessLogTask(
+                        block_number=task.block_number,
+                        log=task.log,
+                        log_index=task.log_index,
+                        timestamp=task.timestamp,
+                    )
+                )
             else:
                 raise Exception(
                     "Reached max number of retries for processing block number {}".format(
@@ -55,19 +65,17 @@ class BlockProcessor:
                     )
                 )
 
-    def process(self, dispatcher, w3, task):
-        logger.info("Processing block", block_number=task.block_number)
+    def process(self, dispatcher: Dispatcher, w3: Web3, task: ProcessLogTask):
+        logger.info(
+            "Fetching log",
+            block_number=task.block_number,
+            log_index=task.log_index,
+        )
 
-        block = w3.eth.get_block(task.block_number)
-        timestamp = datetime.fromtimestamp(block.timestamp)
+        log = task.log
+        log_index = task.log_index
+        timestamp = task.timestamp
 
-        for transaction in block.transactions:
-            txn_receipt = w3.eth.get_transaction_receipt(transaction)
-
-            for log_index, log in enumerate(txn_receipt.logs):
-                self._process_log(w3, log, log_index, timestamp)
-
-    def _process_log(self, w3: Web3, log, log_index: int, timestamp: datetime):
         topics = log.topics
         contract_address = log.address
         event_signature = topics[0].hex()

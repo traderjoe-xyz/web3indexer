@@ -101,7 +101,7 @@ class UniSwapPairSwapCollector:
                 task.address,
                 to_block,
             ),
-            60
+            60,
         )
 
 
@@ -145,14 +145,18 @@ class GenericEventCollector:
         else:
             end_block = task.from_block + self.BLOCKS_CHUNK_SIZE
 
-        events = getattr(contract.events, task.event).createFilter(
-            fromBlock=task.from_block,
-            toBlock=end_block,
-        ).get_all_entries()
+        events = (
+            getattr(contract.events, task.event)
+            .createFilter(
+                fromBlock=task.from_block,
+                toBlock=end_block,
+            )
+            .get_all_entries()
+        )
 
         for event in events:
             log.msg(
-                'collected',
+                "collected",
                 name=task.event,
                 address=task.address,
                 collector=self.__class__.__name__,
@@ -183,5 +187,5 @@ class GenericEventCollector:
                     collector=task.collector,
                     retries=0,
                 ),
-                60
+                60,
             )
