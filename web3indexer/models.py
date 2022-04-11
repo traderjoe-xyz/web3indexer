@@ -20,6 +20,7 @@ class Contract(BaseModel):
         allow_population_by_field_name = True
 
 
+# TODO: Add minted_at, is_burned fields
 class Nft(BaseModel):
     contract_id: str
     token_id: int
@@ -37,3 +38,11 @@ class Transfer(BaseModel):
 
     class Config:
         allow_population_by_field_name = True
+
+
+class UpsertOwnership(BaseModel):
+    block_number: int
+    delta_quantity: int
+    log_index: int
+    nft_id: str
+    owner: str
