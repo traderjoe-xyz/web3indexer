@@ -1,8 +1,10 @@
 import json
 import os
+from time import sleep
 from threading import Thread
 from typing import List
 
+from kafka import KafkaConsumer, KafkaProducer
 from pymongo import MongoClient
 import structlog
 
@@ -52,6 +54,29 @@ def fetch_blocks(dispatcher, block_numbers: List[int]):
 
 
 def run():
+    producer = KafkaProducer(
+        api_version=(2, 0, 2),
+        bootstrap_servers=["localhost:9092"],
+        value_serializer=lambda x: json.dumps(x).encode("utf-8"),
+    )
+    for i in range(10):
+        producer.send("test-topic", value={"number": i})
+        sleep(1)
+
+    consumer = KafkaConsumer(
+        "test-topic",
+        api_version=(2, 0, 2),
+        bootstrap_servers=["localhost:9092"],
+        auto_offset_reset="earliest",
+        enable_auto_commit=True,
+        group_id="my-group",
+        value_deserializer=lambda x: json.loads(x.decode("utf-8")),
+    )
+    for msg in consumer:
+        print("Got message", msg)
+
+    return
+
     dispatcher = Dispatcher()
     endpoint_uri = os.environ["ENDPOINT_URL"]
     connection = MongoClient(os.environ["MONGODB_URI"])
@@ -78,6 +103,8 @@ def run():
     #     insert_if_not_exists(db, address, abi)
 
     # add_nft_contracts(db, dispatcher)
+
+    consumer = KafkaConsumer("my_favorite_topic")
 
     main_thread = Thread(target=worker.run)
     try:

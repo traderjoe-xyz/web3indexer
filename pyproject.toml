@@ -11,9 +11,12 @@ web3 = "^5.28.0"
 structlog = "^21.5.0"
 pymongo = "^4.0.2"
 pydantic = "^1.9.0"
+kafka-python = "^2.0.2"
 
 [tool.poetry.scripts]
 index = 'web3indexer.indexer:main'
+producer = 'web3indexer.producer:main'
+consumer = 'web3indexer.consumer:main'
 
 [tool.poetry.dev-dependencies]
 bpython = "^0.22.1"
