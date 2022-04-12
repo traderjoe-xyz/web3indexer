@@ -1,6 +1,7 @@
 from datetime import datetime
+import os
 
-from pymongo.database import Database
+from pymongo import MongoClient
 import structlog
 from web3 import Web3
 
@@ -21,9 +22,7 @@ from .crud import (
     upsert_nft,
     upsert_transfer,
 )
-from .dispatcher import Dispatcher
 from .models import Contract, ContractType, Nft, Transfer, UpsertOwnership
-from .task import ProcessLogTask
 from .utils import get_nft_id, read_file
 
 
@@ -41,9 +40,11 @@ class LogProcessor:
 
     MAX_RETRIES = 5
 
-    def __init__(self, w3: Web3, db: Database):
+    def __init__(self, w3: Web3):
         self.w3 = w3
-        self.db = db
+
+        connection = MongoClient(os.environ["MONGODB_URI"])
+        self.db = connection.web3indexer
 
     def process_with_retry(
         self, block_number: int, log, log_index: int, timestamp: datetime

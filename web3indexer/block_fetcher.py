@@ -1,13 +1,10 @@
-from datetime import datetime
-import os
+import json
 
 from kafka import KafkaProducer
 import structlog
 from web3 import Web3
-from web3.middleware import geth_poa_middleware
 
 from .constants import PROCESS_LOG_KAFKA_TOPIC
-from .task import FetchBlockTask, ProcessLogTask
 
 
 logger = structlog.get_logger()
@@ -20,9 +17,13 @@ class BlockFetcher:
 
     MAX_RETRIES = 5
 
-    def __init__(self, w3: Web3, producer: KafkaProducer):
+    def __init__(self, w3: Web3):
         self.w3 = w3
-        self.producer = producer
+        self.producer = KafkaProducer(
+            api_version=(2, 0, 2),
+            bootstrap_servers=["localhost:9092"],
+            value_serializer=lambda x: json.dumps(x).encode("utf-8"),
+        )
 
     def fetch_with_retry(self, block_number: int):
         try:

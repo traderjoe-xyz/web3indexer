@@ -1,32 +1,15 @@
 import json
-from datetime import datetime
-import os
-import sys
-from time import sleep
-from queue import Queue
-from threading import get_ident, Thread
 from multiprocessing import Process
-from typing import List
+import os
+from queue import Queue
+import sys
+from threading import get_ident, Thread
 
-from kafka import KafkaConsumer, KafkaProducer
-from pymongo import MongoClient
-from pymongo.database import Database
+from kafka import KafkaConsumer
 import structlog
-from web3 import Web3
-from web3.datastructures import AttributeDict
-from web3.middleware import geth_poa_middleware
 
-from .block_fetcher import BlockFetcher
-from .constants import FETCH_BLOCK_KAFKA_TOPIC, PROCESS_LOG_KAFKA_TOPIC, SUPPORTED_KAFKA_TOPICS
-from .collector import GenericEventCollector, _read_file  # XXX
-from .crud import (
-    get_all_contracts,
-    get_last_scanned_event,
-)
-from .dispatcher import Dispatcher
-from .log_processor import LogProcessor
-from .task import FetchBlockTask, ScrapeTask
-from .worker import Worker, STOP_TASK
+from .constants import SUPPORTED_KAFKA_TOPICS
+from .message_handler import MessageHandler
 
 
 log = structlog.get_logger()
@@ -35,22 +18,9 @@ log = structlog.get_logger()
 def _process_msg(msg_queue: Queue):
     msg = msg_queue.get(
         timeout=60
-    )  # Set timeout to care for POSIX<3.0 and Windows.
-
-    endpoint_uri = os.environ["ENDPOINT_URL"]
-    w3 = Web3(Web3.HTTPProvider(endpoint_uri))
-    # Required for Avalanche, see https://web3py.readthedocs.io/en/stable/middleware.html#geth-style-proof-of-authority
-    w3.middleware_onion.inject(geth_poa_middleware, layer=0)
-
-    endpoint_uri = os.environ["ENDPOINT_URL"]
-    connection = MongoClient(os.environ["MONGODB_URI"])
-    db = connection.web3indexer
-
-    producer = KafkaProducer(
-        api_version=(2, 0, 2),
-        bootstrap_servers=["localhost:9092"],
-        value_serializer=lambda x: json.dumps(x).encode("utf-8"),
     )
+
+    msg_handler = MessageHandler()
 
     for topic_partition, consumer_records in msg.items():
         for consumer_record in consumer_records:
@@ -63,21 +33,7 @@ def _process_msg(msg_queue: Queue):
                     topic_partition.partition,
                 )
             )
-            if topic_partition.topic == FETCH_BLOCK_KAFKA_TOPIC:
-                block_fetcher = BlockFetcher(w3, producer)
-                block_fetcher.fetch_with_retry(consumer_record.value)
-            elif topic_partition.topic == PROCESS_LOG_KAFKA_TOPIC:
-                log_processor = LogProcessor(w3, db)
-                log_processor.process_with_retry(
-                    consumer_record.value["block_number"],
-                    AttributeDict(json.loads(consumer_record.value["log"])),
-                    consumer_record.value['log_index'],
-                    datetime.fromtimestamp(consumer_record.value['timestamp']),
-                )
-            else:
-                log.error("Unsupported Kafka topic: {}".format(topic_partition.topic))
-
-    msg_queue.task_done()
+            msg_handler.handle_message(topic_partition, consumer_record)
 
 
 def _consume(topic: str, group_id: str):
@@ -100,7 +56,7 @@ def _consume(topic: str, group_id: str):
 
     while True:
         try:
-            msg = consumer.poll(1)
+            msg = consumer.poll()
             if not msg:
                 continue
             msg_queue.put(msg)
@@ -144,9 +100,9 @@ def main():
         return
 
     topic = args[1]
-    if not topic in SUPPORTED_TOPICS:
+    if not topic in SUPPORTED_KAFKA_TOPICS:
         log.error(
-            "Unsupported topic, expected one of: {}".format(SUPPORTED_TOPICS)
+            "Unsupported topic, expected one of: {}".format(SUPPORTED_KAFKA_TOPICS)
         )
         return
 
