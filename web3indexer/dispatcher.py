@@ -1,11 +1,16 @@
 from queue import Queue
 import time
 
-from .task import ScheduledTask, Task, ScrapeTask
+from .task import (
+    FetchBlockTask,
+    ProcessLogTask,
+    ScheduledTask,
+    ScrapeTask,
+    Task,
+)
 
 
 class Dispatcher:
-
     def __init__(self):
         self.queue = Queue()
 
@@ -17,6 +22,10 @@ class Dispatcher:
             task = self.queue.get()
             if isinstance(task, (Task, ScrapeTask)):
                 break
+            if isinstance(task, FetchBlockTask) or isinstance(
+                task, ProcessLogTask
+            ):
+                return task
             if isinstance(task, ScheduledTask):
                 if time.time() >= task.not_before:
                     task = task.task
@@ -27,7 +36,7 @@ class Dispatcher:
         return task
 
     def schedule(self, task, n):
-        self.put(ScheduledTask(task, time.time() +  n))
+        self.put(ScheduledTask(task, time.time() + n))
 
     def join(self):
         self.queue.join()

@@ -3,8 +3,11 @@ import time
 
 import structlog
 from web3 import Web3
+from web3.middleware import geth_poa_middleware
 
-from .task import Task
+from .block_fetcher import BlockFetcher
+from .log_processor import LogProcessor
+from .task import ScrapeTask, Task, ProcessLogTask, FetchBlockTask
 
 
 log = structlog.get_logger()
@@ -18,11 +21,15 @@ class Worker:
     Manages collectors and the w3 connection.
     """
 
-    def __init__(self, endpoint_uri, dispatcher, max_collectors=None):
+    def __init__(self, endpoint_uri, dispatcher, db, max_collectors=None):
         self.dispatcher = dispatcher
+        self.block_fetcher = BlockFetcher()
+        self.log_processor = LogProcessor(db)
         self.max_collectors = max_collectors
         self.collectors = {}
         self.w3 = Web3(Web3.HTTPProvider(endpoint_uri))
+        # Required for Avalanche, see https://web3py.readthedocs.io/en/stable/middleware.html#geth-style-proof-of-authority
+        self.w3.middleware_onion.inject(geth_poa_middleware, layer=0)
 
     def run(self):
         with ThreadPoolExecutor(max_workers=self.max_collectors) as executor:
@@ -34,12 +41,27 @@ class Worker:
                 # Special case the stop task.
                 if task is STOP_TASK:
                     return
-                executor.submit(
-                    self.collectors[task.collector].collect_with_retry,
-                    self.dispatcher,
-                    self.w3,
-                    task,
-                )
+                if isinstance(task, FetchBlockTask):
+                    executor.submit(
+                        self.block_fetcher.fetch_with_retry,
+                        self.dispatcher,
+                        self.w3,
+                        task,
+                    )
+                elif isinstance(task, ProcessLogTask):
+                    executor.submit(
+                        self.log_processor.process_with_retry,
+                        self.dispatcher,
+                        self.w3,
+                        task,
+                    )
+                elif isinstance(task, Task) or isinstance(task, ScrapeTask):
+                    executor.submit(
+                        self.collectors[task.collector].collect_with_retry,
+                        self.dispatcher,
+                        self.w3,
+                        task,
+                    )
 
     def run_single(self):
         # Used for debugging.
@@ -56,5 +78,3 @@ class Worker:
 
     def add_collector_by_name(self, name, obj):
         self.collectors[name] = obj
-
-
