@@ -1,8 +1,10 @@
-from datetime import datetime
+import json
 
+from kafka import KafkaProducer
 import structlog
+from web3 import Web3
 
-from .task import FetchBlockTask, ProcessLogTask
+from .constants import PROCESS_LOG_KAFKA_TOPIC
 
 
 logger = structlog.get_logger()
@@ -15,35 +17,36 @@ class BlockFetcher:
 
     MAX_RETRIES = 5
 
-    def fetch_with_retry(self, dispatcher, w3, task):
+    def __init__(self, w3: Web3):
+        self.w3 = w3
+        self.producer = KafkaProducer(
+            api_version=(2, 0, 2),
+            bootstrap_servers=["localhost:9092"],
+            value_serializer=lambda x: json.dumps(x).encode("utf-8"),
+        )
+
+    def fetch_with_retry(self, block_number: int):
         try:
-            self.fetch(dispatcher, w3, task)
+            self.fetch(block_number)
         except Exception as e:
+            # TODO: Handle retries
             logger.error(e)
-            if task.retries < self.MAX_RETRIES:
-                dispatcher.put(FetchBlockTask(block_number=task.block_number))
-            else:
-                raise Exception(
-                    "Reached max number of retries for fetching block number {}".format(
-                        task.block_number
-                    )
-                )
 
-    def fetch(self, dispatcher, w3, task):
-        logger.info("Fetching block", block_number=task.block_number)
+    def fetch(self, block_number: int):
+        logger.info("Fetching block", block_number=block_number)
 
-        block = w3.eth.get_block(task.block_number)
-        timestamp = datetime.fromtimestamp(block.timestamp)
+        block = self.w3.eth.get_block(block_number)
 
         for transaction in block.transactions:
-            txn_receipt = w3.eth.get_transaction_receipt(transaction)
+            txn_receipt = self.w3.eth.get_transaction_receipt(transaction)
 
             for log_index, log in enumerate(txn_receipt.logs):
-                dispatcher.put(
-                    ProcessLogTask(
-                        block_number=task.block_number,
-                        log=log,
-                        log_index=log_index,
-                        timestamp=timestamp,
-                    )
+                self.producer.send(
+                    PROCESS_LOG_KAFKA_TOPIC,
+                    value={
+                        "block_number": block_number,
+                        "log": Web3.toJSON(log),
+                        "log_index": log_index,
+                        "timestamp": block.timestamp,
+                    },
                 )

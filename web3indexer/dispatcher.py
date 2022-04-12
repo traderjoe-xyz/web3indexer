@@ -2,8 +2,6 @@ from queue import Queue
 import time
 
 from .task import (
-    FetchBlockTask,
-    ProcessLogTask,
     ScheduledTask,
     ScrapeTask,
     Task,
@@ -22,10 +20,6 @@ class Dispatcher:
             task = self.queue.get()
             if isinstance(task, (Task, ScrapeTask)):
                 break
-            if isinstance(task, FetchBlockTask) or isinstance(
-                task, ProcessLogTask
-            ):
-                return task
             if isinstance(task, ScheduledTask):
                 if time.time() >= task.not_before:
                     task = task.task

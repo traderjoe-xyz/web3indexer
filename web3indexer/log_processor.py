@@ -1,5 +1,7 @@
 from datetime import datetime
+import os
 
+from pymongo import MongoClient
 import structlog
 from web3 import Web3
 
@@ -20,9 +22,7 @@ from .crud import (
     upsert_nft,
     upsert_transfer,
 )
-from .dispatcher import Dispatcher
 from .models import Contract, ContractType, Nft, Transfer, UpsertOwnership
-from .task import ProcessLogTask
 from .utils import get_nft_id, read_file
 
 
@@ -40,69 +40,55 @@ class LogProcessor:
 
     MAX_RETRIES = 5
 
-    def __init__(self, db):
-        self.db = db
+    def __init__(self, w3: Web3):
+        self.w3 = w3
+
+        connection = MongoClient(os.environ["MONGODB_URI"])
+        self.db = connection.web3indexer
 
     def process_with_retry(
-        self, dispatcher: Dispatcher, w3: Web3, task: ProcessLogTask
+        self, block_number: int, log, log_index: int, timestamp: datetime
     ):
         try:
-            self.process(dispatcher, w3, task)
+            self.process(block_number, log, log_index, timestamp)
         except Exception as e:
+            # TODO: Handle retries
             logger.error(e)
-            if task.retries < self.MAX_RETRIES:
-                dispatcher.put(
-                    ProcessLogTask(
-                        block_number=task.block_number,
-                        log=task.log,
-                        log_index=task.log_index,
-                        timestamp=task.timestamp,
-                    )
-                )
-            else:
-                raise Exception(
-                    "Reached max number of retries for processing block number {}".format(
-                        task.block_number
-                    )
-                )
 
-    def process(self, dispatcher: Dispatcher, w3: Web3, task: ProcessLogTask):
+    def process(
+        self, block_number: int, log, log_index: int, timestamp: datetime
+    ):
         logger.info(
             "Fetching log",
-            block_number=task.block_number,
-            log_index=task.log_index,
+            block_number=block_number,
+            log_index=log_index,
         )
-
-        block_number = task.block_number
-        log = task.log
-        log_index = task.log_index
-        timestamp = task.timestamp
 
         topics = log.topics
         contract_address = log.address
-        event_signature = topics[0].hex()
+        event_signature = topics[0]
         if (
             event_signature == ERC721_TRANSFER_TOPIC
             and self._supports_interface(
-                w3, contract_address, ERC_721_IDENTIFIER
+                self.w3, contract_address, ERC_721_IDENTIFIER
             )
         ):
             self._process_erc721_log(
-                w3, log, block_number, log_index, timestamp
+                self.w3, log, block_number, log_index, timestamp
             )
         elif (
             event_signature == ERC1155_TRANSFER_SINGLE_TOPIC
             or event_signature == ERC1155_TRANSFER_BATCH_TOPIC
         ) and self._supports_interface(
-            w3, contract_address, ERC_1155_IDENTIFIER
+            self.w3, contract_address, ERC_1155_IDENTIFIER
         ):
             if event_signature == ERC1155_TRANSFER_SINGLE_TOPIC:
                 self._process_erc1155_transfer_single_log(
-                    w3, log, block_number, log_index, timestamp
+                    self.w3, log, block_number, log_index, timestamp
                 )
             elif event_signature == ERC1155_TRANSFER_BATCH_TOPIC:
                 self._process_erc1155_transfer_batch_log(
-                    w3, log, block_number, log_index, timestamp
+                    self.w3, log, block_number, log_index, timestamp
                 )
 
     def _process_erc721_log(
@@ -437,22 +423,22 @@ class LogProcessor:
 
     def _parse_erc721_transfer_log(self, log):
         topics = log.topics
-        transfer_from = "0x{}".format(topics[1].hex()[26:])
-        transfer_to = "0x{}".format(topics[2].hex()[26:])
-        token_id = int(topics[3].hex(), 16)
-        txn_hash = log.transactionHash.hex()
+        transfer_from = "0x{}".format(topics[1][26:])
+        transfer_to = "0x{}".format(topics[2][26:])
+        token_id = int(topics[3], 16)
+        txn_hash = log.transactionHash
         return (transfer_from, transfer_to, token_id, txn_hash)
 
     def _parse_erc1155_transfer_single_log(self, log):
         topics = log.topics
-        transfer_from = "0x{}".format(topics[2].hex()[26:])
-        transfer_to = "0x{}".format(topics[3].hex()[26:])
+        transfer_from = "0x{}".format(topics[2][26:])
+        transfer_to = "0x{}".format(topics[3][26:])
 
         data = log.data
         token_id = int(data[2:66], 16)
         quantity = int(data[66:], 16)
 
-        txn_hash = log.transactionHash.hex()
+        txn_hash = log.transactionHash
 
         return (
             transfer_from,
@@ -465,8 +451,8 @@ class LogProcessor:
     def _parse_erc1155_transfer_batch_log(self, log):
         # See https://ethereum.stackexchange.com/questions/58854/how-to-decode-data-parameter-under-logs-in-transaction-receipt
         topics = log.topics
-        transfer_from = "0x{}".format(topics[2].hex()[26:])
-        transfer_to = "0x{}".format(topics[3].hex()[26:])
+        transfer_from = "0x{}".format(topics[2][26:])
+        transfer_to = "0x{}".format(topics[3][26:])
 
         # Strip the prefixing `0x`
         data = log.data[2:]
@@ -500,7 +486,7 @@ class LogProcessor:
             end_index = start_index + 64
             quantities.append(int(data[start_index:end_index], 16))
 
-        txn_hash = log.transactionHash.hex()
+        txn_hash = log.transactionHash
 
         return (
             transfer_from,

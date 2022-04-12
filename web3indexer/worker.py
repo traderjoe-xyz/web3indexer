@@ -7,7 +7,7 @@ from web3.middleware import geth_poa_middleware
 
 from .block_fetcher import BlockFetcher
 from .log_processor import LogProcessor
-from .task import ScrapeTask, Task, ProcessLogTask, FetchBlockTask
+from .task import ScrapeTask, Task
 
 
 log = structlog.get_logger()
@@ -41,20 +41,6 @@ class Worker:
                 # Special case the stop task.
                 if task is STOP_TASK:
                     return
-                if isinstance(task, FetchBlockTask):
-                    executor.submit(
-                        self.block_fetcher.fetch_with_retry,
-                        self.dispatcher,
-                        self.w3,
-                        task,
-                    )
-                elif isinstance(task, ProcessLogTask):
-                    executor.submit(
-                        self.log_processor.process_with_retry,
-                        self.dispatcher,
-                        self.w3,
-                        task,
-                    )
                 elif isinstance(task, Task) or isinstance(task, ScrapeTask):
                     executor.submit(
                         self.collectors[task.collector].collect_with_retry,
