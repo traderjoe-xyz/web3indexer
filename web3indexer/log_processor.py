@@ -16,11 +16,12 @@ from .crud import (
     get_contract,
     get_nft,
     upsert_contract,
+    upsert_ownership,
     upsert_nft,
     upsert_transfer,
 )
 from .dispatcher import Dispatcher
-from .models import Contract, ContractType, Nft, Transfer
+from .models import Contract, ContractType, Nft, Transfer, UpsertOwnership
 from .task import ProcessLogTask
 from .utils import get_nft_id, read_file
 
@@ -72,6 +73,7 @@ class LogProcessor:
             log_index=task.log_index,
         )
 
+        block_number = task.block_number
         log = task.log
         log_index = task.log_index
         timestamp = task.timestamp
@@ -85,7 +87,9 @@ class LogProcessor:
                 w3, contract_address, ERC_721_IDENTIFIER
             )
         ):
-            self._process_erc721_log(w3, log, log_index, timestamp)
+            self._process_erc721_log(
+                w3, log, block_number, log_index, timestamp
+            )
         elif (
             event_signature == ERC1155_TRANSFER_SINGLE_TOPIC
             or event_signature == ERC1155_TRANSFER_BATCH_TOPIC
@@ -94,15 +98,20 @@ class LogProcessor:
         ):
             if event_signature == ERC1155_TRANSFER_SINGLE_TOPIC:
                 self._process_erc1155_transfer_single_log(
-                    w3, log, log_index, timestamp
+                    w3, log, block_number, log_index, timestamp
                 )
             elif event_signature == ERC1155_TRANSFER_BATCH_TOPIC:
                 self._process_erc1155_transfer_batch_log(
-                    w3, log, log_index, timestamp
+                    w3, log, block_number, log_index, timestamp
                 )
 
     def _process_erc721_log(
-        self, w3: Web3, log, log_index: int, timestamp: datetime
+        self,
+        w3: Web3,
+        log,
+        block_number: int,
+        log_index: int,
+        timestamp: datetime,
     ):
         contract_address = log.address
         (
@@ -140,9 +149,23 @@ class LogProcessor:
                 transfer_to=transfer_to,
             ),
         )
+        self._upsert_ownerships(
+            contract_address,
+            token_id,
+            transfer_from,
+            transfer_to,
+            1,  # quantity
+            block_number,
+            log_index,
+        )
 
     def _process_erc1155_transfer_single_log(
-        self, w3: Web3, log, log_index: int, timestamp: datetime
+        self,
+        w3: Web3,
+        log,
+        block_number: int,
+        log_index: int,
+        timestamp: datetime,
     ):
         contract_address = log.address
         (
@@ -184,9 +207,23 @@ class LogProcessor:
                 transfer_to=transfer_to,
             ),
         )
+        self._upsert_ownerships(
+            contract_address,
+            token_id,
+            transfer_from,
+            transfer_to,
+            quantity,
+            block_number,
+            log_index,
+        )
 
     def _process_erc1155_transfer_batch_log(
-        self, w3: Web3, log, log_index: int, timestamp: datetime
+        self,
+        w3: Web3,
+        log,
+        block_number: int,
+        log_index: int,
+        timestamp: datetime,
     ):
         contract_address = log.address
         (
@@ -233,6 +270,15 @@ class LogProcessor:
                     transfer_from=transfer_from,
                     transfer_to=transfer_to,
                 ),
+            )
+            self._upsert_ownerships(
+                contract_address,
+                token_id,
+                transfer_from,
+                transfer_to,
+                quantity,
+                block_number,
+                log_index,
             )
 
     def _upsert_contract(
@@ -462,6 +508,38 @@ class LogProcessor:
             ids,
             quantities,
             txn_hash,
+        )
+
+    def _upsert_ownerships(
+        self,
+        contract_address: str,
+        token_id: int,
+        transfer_from: str,
+        transfer_to: str,
+        quantity: int,
+        block_number: int,
+        log_index: int,
+    ):
+        nft_id = get_nft_id(contract_address, token_id)
+        upsert_ownership(
+            self.db,
+            UpsertOwnership(
+                block_number=block_number,
+                delta_quantity=-1 * quantity,
+                log_index=log_index,
+                nft_id=nft_id,
+                owner=transfer_from,
+            ),
+        )
+        upsert_ownership(
+            self.db,
+            UpsertOwnership(
+                block_number=block_number,
+                delta_quantity=quantity,
+                log_index=log_index,
+                nft_id=nft_id,
+                owner=transfer_to,
+            ),
         )
 
     def _supports_interface(

@@ -2,7 +2,7 @@ import structlog
 
 from pymongo.database import Database
 
-from .models import Contract, Nft, Transfer
+from .models import Contract, Nft, UpsertOwnership, Transfer
 from .utils import get_nft_id, get_transfer_id
 
 
@@ -74,6 +74,25 @@ def upsert_nft(db: Database, nft: Nft):
     db.nfts.find_one_and_update(
         {"_id": nft_id},
         {"$set": {**nft.dict()}},
+        upsert=True,
+    )
+
+
+def upsert_ownership(db: Database, upsert_ownership: UpsertOwnership):
+    # TODO: Need to check if `block_number` and `log_index` have already
+    # been processed to ensure we don't update unnecessarily
+    db.ownerships.find_one_and_update(
+        {
+            "nft_id": upsert_ownership.nft_id,
+            "owner": upsert_ownership.owner,
+        },
+        {
+            "$set": {
+                "nft_id": upsert_ownership.nft_id,
+                "owner": upsert_ownership.owner,
+            },
+            "$inc": {"quantity": upsert_ownership.delta_quantity},
+        },
         upsert=True,
     )
 
